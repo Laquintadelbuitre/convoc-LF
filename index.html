@@ -767,11 +767,19 @@ async function renderConvocationImage(m, teamKey, players, wrap){
   ctx.textAlign = 'center';
   ctx.fillText(`Liste de ${n} joueur${n>1?'s':''} :`, 224 + 866.5/2, 215 + 42);
 
-  // players list, centered as a block, max 2 columns, column-major fill
+  // players list, centered as a block, up to 3 columns (balanced), column-major fill
   const listCenterX = 224 + 866.5/2;
   const listY = 353 + 40, rowH = 40;
-  const cols = players.length > 6 ? 2 : 1;
-  const rows = Math.ceil(players.length / cols) || 1;
+  const cols = n > 12 ? 3 : (n > 6 ? 2 : 1);
+
+  // balance column sizes as evenly as possible (max difference of 1 between columns)
+  const base = Math.floor(n / cols) || 0;
+  const rem = n % cols;
+  const colCounts = [];
+  for(let c=0; c<cols; c++) colCounts.push(base + (c < rem ? 1 : 0));
+  const colOffsets = [0];
+  for(let c=0; c<cols; c++) colOffsets.push(colOffsets[c] + colCounts[c]);
+
   const anyMute = players.some(p => p.mute);
 
   ctx.font = `400 30px ${condensed}`;
@@ -787,10 +795,16 @@ async function renderConvocationImage(m, teamKey, players, wrap){
   const totalWidth = cols === 1 ? maxItemWidth : colSlot*(cols-1) + maxItemWidth;
   const listStartX = listCenterX - totalWidth/2;
 
+  function colRowOf(i){
+    for(let c=0; c<cols; c++){
+      if(i < colOffsets[c+1]) return {col:c, row:i - colOffsets[c]};
+    }
+    return {col:cols-1, row:i - colOffsets[cols-1]};
+  }
+
   ctx.textAlign = 'left';
   labels.forEach(({label, p, i})=>{
-    const col = Math.floor(i / rows);
-    const row = i % rows;
+    const {col, row} = colRowOf(i);
     const x = listStartX + col * colSlot;
     const y = listY + row * rowH;
     ctx.font = `400 30px ${condensed}`;
