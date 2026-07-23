@@ -328,6 +328,7 @@
 
   <section class="panel" id="panel-calendrier">
     <h2>Ajouter une rencontre</h2>
+    <p class="hint" style="margin-top:-6px;">Tu peux renseigner une seule équipe maintenant et l'autre plus tard : si la date est la même, elles se regrouperont automatiquement dans la même rencontre.</p>
     <div class="two-col">
       <div class="team-col a">
         <h3 style="color:var(--red-dark);">Équipe A</h3>
@@ -337,6 +338,7 @@
         <div class="field"><label>Heure du RDV</label><input id="heureA" placeholder="14h15"></div>
         <div class="field"><label>Lieu du RDV</label><input id="lieuA" placeholder="Stade J.M Lafond"></div>
         <div class="field"><label>Adresse du stade</label><input id="adresseA" placeholder="2 avenue de..., 87250 Bessines"></div>
+        <button class="btn btn-primary" id="addMatchBtnA" style="background:var(--red-dark);">Ajouter Équipe A</button>
       </div>
       <div class="team-col b">
         <h3 style="color:var(--royalblue);">Équipe B</h3>
@@ -346,10 +348,9 @@
         <div class="field"><label>Heure du RDV</label><input id="heureB" placeholder="7h00"></div>
         <div class="field"><label>Lieu du RDV</label><input id="lieuB" placeholder="Parking du McDonald's"></div>
         <div class="field"><label>Adresse du stade</label><input id="adresseB" placeholder="Centre Commercial Cora, 87280 Limoges"></div>
+        <button class="btn btn-primary" id="addMatchBtnB" style="background:var(--royalblue);">Ajouter Équipe B</button>
       </div>
     </div>
-
-    <button class="btn btn-primary" id="addMatchBtn">Ajouter la rencontre</button>
 
     <h2 style="margin-top:28px;">Rencontres de la saison</h2>
     <div id="matchList"></div>
@@ -560,12 +561,12 @@ function renderMatches(){
     box.innerHTML = '<div class="empty">Aucune rencontre programmée.</div>';
     return;
   }
-  const sorted = [...matches].sort((a,b)=> (a.A.date||a.B.date||'').localeCompare(b.A.date||b.B.date||''));
+  const sorted = [...matches].sort((a,b)=> ((a.A&&a.A.date)||(a.B&&a.B.date)||'').localeCompare((b.A&&b.A.date)||(b.B&&b.B.date)||''));
   box.innerHTML = sorted.map(m => `
     <div class="list-item">
       <div>
-        <div class="meta"><b style="color:var(--red-dark);">A</b> — ${escapeHtml(m.A.label||'—')} ${m.A.date ? '· '+formatDate(m.A.date) : ''} · VS ${escapeHtml(m.A.adversaire||'—')} · ${escapeHtml(m.A.heure||'—')}</div>
-        <div class="meta"><b style="color:var(--royalblue);">B</b> — ${escapeHtml(m.B.label||'—')} ${m.B.date ? '· '+formatDate(m.B.date) : ''} · VS ${escapeHtml(m.B.adversaire||'—')} · ${escapeHtml(m.B.heure||'—')}</div>
+        <div class="meta"><b style="color:var(--red-dark);">A</b> — ${m.A ? `${escapeHtml(m.A.label||'—')} ${m.A.date ? '· '+formatDate(m.A.date) : ''} · VS ${escapeHtml(m.A.adversaire||'—')} · ${escapeHtml(m.A.heure||'—')}` : '<em>à compléter</em>'}</div>
+        <div class="meta"><b style="color:var(--royalblue);">B</b> — ${m.B ? `${escapeHtml(m.B.label||'—')} ${m.B.date ? '· '+formatDate(m.B.date) : ''} · VS ${escapeHtml(m.B.adversaire||'—')} · ${escapeHtml(m.B.heure||'—')}` : '<em>à compléter</em>'}</div>
       </div>
       <button class="del" data-id="${m.id}" title="Supprimer">×</button>
     </div>
@@ -595,34 +596,42 @@ function formatDate(iso){
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-document.getElementById('addMatchBtn').addEventListener('click', ()=>{
-  const A = {
-    label: document.getElementById('labelA').value.trim(),
-    date: document.getElementById('dateA').value,
-    adversaire: document.getElementById('advA').value.trim(),
-    heure: document.getElementById('heureA').value.trim(),
-    lieu: document.getElementById('lieuA').value.trim(),
-    adresse: document.getElementById('adresseA').value.trim()
+function addTeamEntry(team){
+  const suffix = team; // 'A' or 'B'
+  const data = {
+    label: document.getElementById('label'+suffix).value.trim(),
+    date: document.getElementById('date'+suffix).value,
+    adversaire: document.getElementById('adv'+suffix).value.trim(),
+    heure: document.getElementById('heure'+suffix).value.trim(),
+    lieu: document.getElementById('lieu'+suffix).value.trim(),
+    adresse: document.getElementById('adresse'+suffix).value.trim()
   };
-  const B = {
-    label: document.getElementById('labelB').value.trim(),
-    date: document.getElementById('dateB').value,
-    adversaire: document.getElementById('advB').value.trim(),
-    heure: document.getElementById('heureB').value.trim(),
-    lieu: document.getElementById('lieuB').value.trim(),
-    adresse: document.getElementById('adresseB').value.trim()
-  };
-  if(!A.adversaire && !B.adversaire){ toast('Indique au moins un adversaire'); return; }
-  matches.push({id: uid(), A, B});
-  ['labelA','dateA','advA','heureA','lieuA','adresseA','labelB','dateB','advB','heureB','lieuB','adresseB'].forEach(id=>document.getElementById(id).value='');
+  if(!data.adversaire){ toast('Indique au moins l\'adversaire'); return; }
+  if(!data.date){ toast('Indique une date pour regrouper correctement la rencontre'); return; }
+
+  const otherTeam = team === 'A' ? 'B' : 'A';
+  // look for an existing match with the same date where this team's slot is still free
+  let target = matches.find(m => !m[team] && m[otherTeam] && m[otherTeam].date === data.date);
+  if(target){
+    target[team] = data;
+  } else {
+    matches.push({id: uid(), A: team==='A'?data:null, B: team==='B'?data:null});
+  }
+  ['label','date','adv','heure','lieu','adresse'].forEach(prefix=>{
+    document.getElementById(prefix+suffix).value='';
+  });
   saveMatches();
   renderMatches();
-});
+}
+
+document.getElementById('addMatchBtnA').addEventListener('click', ()=> addTeamEntry('A'));
+document.getElementById('addMatchBtnB').addEventListener('click', ()=> addTeamEntry('B'));
+
 
 // ---------- convocation ----------
 function renderMatchSelect(){
   const sel = document.getElementById('matchSelect');
-  const sorted = [...matches].sort((a,b)=> (a.A.date||a.B.date||'').localeCompare(b.A.date||b.B.date||''));
+  const sorted = [...matches].sort((a,b)=> ((a.A&&a.A.date)||(a.B&&a.B.date)||'').localeCompare((b.A&&b.A.date)||(b.B&&b.B.date)||''));
   if(sorted.length === 0){
     sel.innerHTML = '<option>Aucune rencontre — ajoute-en une dans Calendrier</option>';
     document.getElementById('matchInfoBox').innerHTML = '';
@@ -630,8 +639,8 @@ function renderMatchSelect(){
     return;
   }
   sel.innerHTML = sorted.map(m => {
-    const label = `${m.A.label||'A'} / ${m.B.label||'B'}`;
-    const date = m.A.date || m.B.date;
+    const label = `${(m.A&&m.A.label)||'A'} / ${(m.B&&m.B.label)||'B'}`;
+    const date = (m.A&&m.A.date) || (m.B&&m.B.date);
     return `<option value="${m.id}">${escapeHtml(label)}${date ? ' — ' + formatDate(date) : ''}</option>`;
   }).join('');
   if(!currentMatchId || !matches.find(m=>m.id===currentMatchId)){
@@ -659,8 +668,8 @@ function renderMatchInfo(){
   if(!m){ box.innerHTML=''; return; }
   box.innerHTML = `
     <div class="match-info">
-      <div class="card a"><b>VS ${escapeHtml(m.A.adversaire||'—')}</b>${m.A.date ? formatDate(m.A.date)+' · ' : ''}${escapeHtml(m.A.heure||'—')} · ${escapeHtml(m.A.lieu||'—')}</div>
-      <div class="card b"><b>VS ${escapeHtml(m.B.adversaire||'—')}</b>${m.B.date ? formatDate(m.B.date)+' · ' : ''}${escapeHtml(m.B.heure||'—')} · ${escapeHtml(m.B.lieu||'—')}</div>
+      <div class="card a">${m.A ? `<b>VS ${escapeHtml(m.A.adversaire||'—')}</b>${m.A.date ? formatDate(m.A.date)+' · ' : ''}${escapeHtml(m.A.heure||'—')} · ${escapeHtml(m.A.lieu||'—')}` : '<b>Équipe A</b>à compléter dans Calendrier'}</div>
+      <div class="card b">${m.B ? `<b>VS ${escapeHtml(m.B.adversaire||'—')}</b>${m.B.date ? formatDate(m.B.date)+' · ' : ''}${escapeHtml(m.B.heure||'—')} · ${escapeHtml(m.B.lieu||'—')}` : '<b>Équipe B</b>à compléter dans Calendrier'}</div>
     </div>
   `;
 }
@@ -784,8 +793,16 @@ document.getElementById('generateBtn').addEventListener('click', async ()=>{
   const teamBPlayers = children.filter(c => getAssign(c.id).team === 'B')
     .sort((a,b)=> (getAssign(a.id).order||0) - (getAssign(b.id).order||0));
 
-  await renderConvocationImage(m, 'A', teamAPlayers, wrap);
-  await renderConvocationImage(m, 'B', teamBPlayers, wrap);
+  if(m.A){
+    await renderConvocationImage(m, 'A', teamAPlayers, wrap);
+  } else {
+    toast("Équipe A pas encore renseignée pour cette rencontre — image ignorée");
+  }
+  if(m.B){
+    await renderConvocationImage(m, 'B', teamBPlayers, wrap);
+  } else {
+    toast("Équipe B pas encore renseignée pour cette rencontre — image ignorée");
+  }
 });
 
 function loadImage(src){
