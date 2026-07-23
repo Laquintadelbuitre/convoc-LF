@@ -309,6 +309,7 @@
 <nav class="tabs">
   <button class="active" data-tab="effectif">Effectif</button>
   <button data-tab="calendrier">Calendrier</button>
+  <button data-tab="import">Import CSV</button>
   <button data-tab="convocation">Convocation</button>
 </nav>
 
@@ -354,6 +355,28 @@
 
     <h2 style="margin-top:28px;">Rencontres de la saison</h2>
     <div id="matchList"></div>
+  </section>
+
+  <section class="panel" id="panel-import">
+    <h2>Importer un calendrier (CSV)</h2>
+    <p class="hint" style="margin-top:-6px;">Un fichier = les rencontres d'une seule équipe. Colonnes attendues : Libellé, Date, Adversaire, Heure du RDV, Lieu du RDV, Adresse du stade. 99 lignes maximum. Les rencontres importées se regroupent automatiquement par date avec celles déjà saisies (comme dans Calendrier).</p>
+
+    <div class="two-col" style="margin-bottom:14px;">
+      <label class="team-col a" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <input type="radio" name="csvTeam" value="A" checked style="accent-color:var(--red);"> <b style="color:var(--red-dark);">Équipe A</b>
+      </label>
+      <label class="team-col b" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <input type="radio" name="csvTeam" value="B" style="accent-color:var(--royalblue);"> <b style="color:var(--royalblue);">Équipe B</b>
+      </label>
+    </div>
+
+    <div id="csvDropzone" style="border:2px dashed var(--line); border-radius:10px; padding:24px; text-align:center; cursor:pointer;">
+      <div style="font-size:14px; font-weight:700; color:var(--pitch-dark);">Glisser un fichier .csv ici</div>
+      <div style="font-size:12px; color:#8b978f; margin-top:2px;">ou clique pour parcourir tes fichiers</div>
+      <input type="file" id="csvFileInput" accept=".csv,text/csv" style="display:none;">
+    </div>
+
+    <div id="csvPreviewBox"></div>
   </section>
 
   <section class="panel" id="panel-convocation">
@@ -596,6 +619,17 @@ function formatDate(iso){
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+function mergeTeamData(team, data){
+  const otherTeam = team === 'A' ? 'B' : 'A';
+  // look for an existing match with the same date where this team's slot is still free
+  let target = matches.find(m => !m[team] && m[otherTeam] && m[otherTeam].date === data.date);
+  if(target){
+    target[team] = data;
+  } else {
+    matches.push({id: uid(), A: team==='A'?data:null, B: team==='B'?data:null});
+  }
+}
+
 function addTeamEntry(team){
   const suffix = team; // 'A' or 'B'
   const data = {
@@ -609,14 +643,7 @@ function addTeamEntry(team){
   if(!data.adversaire){ toast('Indique au moins l\'adversaire'); return; }
   if(!data.date){ toast('Indique une date pour regrouper correctement la rencontre'); return; }
 
-  const otherTeam = team === 'A' ? 'B' : 'A';
-  // look for an existing match with the same date where this team's slot is still free
-  let target = matches.find(m => !m[team] && m[otherTeam] && m[otherTeam].date === data.date);
-  if(target){
-    target[team] = data;
-  } else {
-    matches.push({id: uid(), A: team==='A'?data:null, B: team==='B'?data:null});
-  }
+  mergeTeamData(team, data);
   ['label','date','adv','heure','lieu','adresse'].forEach(prefix=>{
     document.getElementById(prefix+suffix).value='';
   });
@@ -626,6 +653,144 @@ function addTeamEntry(team){
 
 document.getElementById('addMatchBtnA').addEventListener('click', ()=> addTeamEntry('A'));
 document.getElementById('addMatchBtnB').addEventListener('click', ()=> addTeamEntry('B'));
+
+// ---------- CSV import ----------
+let csvPreviewRows = [];
+
+function normalizeDateStr(s){
+  s = (s||'').trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  if(m){
+    const dd = m[1].padStart(2,'0');
+    const mm = m[2].padStart(2,'0');
+    return `${m[3]}-${mm}-${dd}`;
+  }
+  return s;
+}
+
+function parseCsvLine(line, delim){
+  const cells = [];
+  let cur = '';
+  let inQuotes = false;
+  for(let i=0; i<line.length; i++){
+    const ch = line[i];
+    if(inQuotes){
+      if(ch === '"'){
+        if(line[i+1] === '"'){ cur += '"'; i++; }
+        else inQuotes = false;
+      } else cur += ch;
+    } else {
+      if(ch === '"') inQuotes = true;
+      else if(ch === delim){ cells.push(cur); cur = ''; }
+      else cur += ch;
+    }
+  }
+  cells.push(cur);
+  return cells.map(c=>c.trim());
+}
+
+function parseCsvText(text){
+  const lines = text.split(/\r?\n/).filter(l=>l.trim().length);
+  if(lines.length === 0) return [];
+
+  const firstLine = lines[0];
+  const semiCount = (firstLine.match(/;/g)||[]).length;
+  const commaCount = (firstLine.match(/,/g)||[]).length;
+  const delim = semiCount > commaCount ? ';' : ',';
+
+  const rows = lines.map(l=>parseCsvLine(l, delim));
+  const stripAccents = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const headerNorm = rows[0].map(stripAccents);
+  const looksLikeHeader = headerNorm.some(h=>h.includes('date')) || headerNorm.some(h=>h.includes('adversaire'));
+
+  let colMap, dataRows;
+  if(looksLikeHeader){
+    const find = kw => headerNorm.findIndex(h=>h.includes(kw));
+    colMap = {
+      label: find('libell'),
+      date: find('date'),
+      adversaire: find('adversaire'),
+      heure: find('heure'),
+      lieu: find('lieu'),
+      adresse: find('adresse')
+    };
+    dataRows = rows.slice(1);
+  } else {
+    colMap = {label:0, date:1, adversaire:2, heure:3, lieu:4, adresse:5};
+    dataRows = rows;
+  }
+
+  return dataRows.slice(0, 99).map(r=>({
+    label: colMap.label>=0 ? (r[colMap.label]||'') : '',
+    date: normalizeDateStr(colMap.date>=0 ? (r[colMap.date]||'') : ''),
+    adversaire: colMap.adversaire>=0 ? (r[colMap.adversaire]||'') : '',
+    heure: colMap.heure>=0 ? (r[colMap.heure]||'') : '',
+    lieu: colMap.lieu>=0 ? (r[colMap.lieu]||'') : '',
+    adresse: colMap.adresse>=0 ? (r[colMap.adresse]||'') : ''
+  })).filter(row => row.adversaire);
+}
+
+function renderCsvPreview(){
+  const box = document.getElementById('csvPreviewBox');
+  if(csvPreviewRows.length === 0){ box.innerHTML = ''; return; }
+  const shown = csvPreviewRows.slice(0, 5);
+  const rest = csvPreviewRows.length - shown.length;
+  box.innerHTML = `
+    <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:#6b756e; margin:16px 0 6px;">Aperçu avant import</div>
+    <div style="border:1px solid var(--line); border-radius:8px; overflow:hidden;">
+      <div style="display:flex; justify-content:space-between; padding:8px 12px; background:var(--bg); font-size:12px; font-weight:700; color:var(--pitch-dark);">
+        <span>${csvPreviewRows.length} rencontre(s) détectée(s)</span>
+        <span style="font-weight:400; color:#8b978f;">max 99</span>
+      </div>
+      ${shown.map(r=>`
+        <div style="padding:10px 12px; font-size:12.5px; border-top:1px solid var(--line);">
+          ${escapeHtml(r.label||'—')} ${r.date ? '· '+formatDate(r.date) : ''} · VS ${escapeHtml(r.adversaire)}
+        </div>
+      `).join('')}
+      ${rest > 0 ? `<div style="padding:8px 12px; font-size:11.5px; color:#8b978f; border-top:1px solid var(--line);">+ ${rest} autre(s) ligne(s)...</div>` : ''}
+    </div>
+    <div class="hint">Une ligne pourra être corrigée après import, directement dans l'onglet Calendrier.</div>
+    <button class="btn btn-amber" id="csvImportBtn" style="margin-top:8px;">Importer dans le calendrier</button>
+  `;
+  document.getElementById('csvImportBtn').addEventListener('click', ()=>{
+    const team = document.querySelector('input[name="csvTeam"]:checked').value;
+    let count = 0;
+    csvPreviewRows.forEach(data=>{
+      if(data.adversaire && data.date){ mergeTeamData(team, data); count++; }
+    });
+    saveMatches();
+    renderMatches();
+    toast(`${count} rencontre(s) importée(s) pour l'Équipe ${team}`);
+    csvPreviewRows = [];
+    renderCsvPreview();
+    document.getElementById('csvFileInput').value = '';
+  });
+}
+
+function handleCsvFile(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    csvPreviewRows = parseCsvText(e.target.result);
+    if(csvPreviewRows.length === 0){ toast('Aucune rencontre reconnue dans ce fichier'); }
+    renderCsvPreview();
+  };
+  reader.onerror = ()=> toast('Impossible de lire ce fichier');
+  reader.readAsText(file, 'UTF-8');
+}
+
+const csvDropzone = document.getElementById('csvDropzone');
+const csvFileInput = document.getElementById('csvFileInput');
+csvDropzone.addEventListener('click', ()=> csvFileInput.click());
+csvFileInput.addEventListener('change', e=> handleCsvFile(e.target.files[0]));
+csvDropzone.addEventListener('dragover', e=>{ e.preventDefault(); csvDropzone.style.borderColor = 'var(--amber)'; });
+csvDropzone.addEventListener('dragleave', ()=>{ csvDropzone.style.borderColor = 'var(--line)'; });
+csvDropzone.addEventListener('drop', e=>{
+  e.preventDefault();
+  csvDropzone.style.borderColor = 'var(--line)';
+  if(e.dataTransfer.files[0]) handleCsvFile(e.dataTransfer.files[0]);
+});
 
 
 // ---------- convocation ----------
