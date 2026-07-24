@@ -307,15 +307,15 @@
 </header>
 
 <nav class="tabs">
-  <button class="active" data-tab="effectif">Effectif</button>
-  <button data-tab="calendrier">Calendrier</button>
-  <button data-tab="import">Import CSV</button>
-  <button data-tab="convocation">Convocation</button>
+  <button data-tab="effectif"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-3px;margin-right:4px;"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 2.5-5 6-5s6 2 6 5"/><circle cx="17" cy="8" r="2.5"/><path d="M15 15.2c2.8.3 4.5 2 4.5 4.8"/></svg>Effectif</button>
+  <button data-tab="calendrier"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-3px;margin-right:4px;"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Calendrier</button>
+  <button data-tab="import"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-3px;margin-right:4px;"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg>Import CSV</button>
+  <button class="active" data-tab="convocation"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-3px;margin-right:4px;"><path d="M8 3v3M16 3v3M4 8h16"/><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 13l2.5 2.5L16 10"/></svg>Convocation</button>
 </nav>
 
 <main>
 
-  <section class="panel active" id="panel-effectif">
+  <section class="panel" id="panel-effectif">
     <h2>Liste des enfants</h2>
     <div class="field">
       <label>Nom de l'enfant</label>
@@ -324,7 +324,20 @@
         <div style="flex:0 0 auto;"><button class="btn btn-primary" id="addChildBtn">Ajouter</button></div>
       </div>
     </div>
+    <div class="field">
+      <input id="childSearch" placeholder="Rechercher un enfant...">
+    </div>
     <div id="childList"></div>
+
+    <div style="margin-top:24px; padding-top:16px; border-top:1px solid var(--line);">
+      <h3 style="margin-bottom:8px;">Sauvegarde</h3>
+      <div class="hint" style="margin-top:0;">Ces données ne vivent que dans ce navigateur. Exporte-les régulièrement pour ne rien perdre si tu changes d'appareil.</div>
+      <div class="actions">
+        <button class="btn btn-primary" id="exportDataBtn">Exporter mes données</button>
+        <button class="btn btn-primary" id="importDataBtn" style="background:var(--pitch);">Importer une sauvegarde</button>
+        <input type="file" id="importDataInput" accept="application/json" style="display:none;">
+      </div>
+    </div>
   </section>
 
   <section class="panel" id="panel-calendrier">
@@ -379,7 +392,7 @@
     <div id="csvPreviewBox"></div>
   </section>
 
-  <section class="panel" id="panel-convocation">
+  <section class="panel active" id="panel-convocation">
     <h2>Sélection de la rencontre</h2>
     <div class="field">
       <select id="matchSelect"></select>
@@ -389,11 +402,11 @@
 
     <div id="convocationBody"></div>
 
-    <div class="actions">
-      <button class="btn btn-amber" id="generateBtn">Générer les images</button>
-    </div>
-
     <div id="canvasWrap"></div>
+
+    <div class="actions" style="position:sticky; bottom:0; background:var(--card); margin-top:16px; padding:14px 0 4px; border-top:1px solid var(--line);">
+      <button class="btn btn-amber" id="generateBtn" style="width:100%;">Générer les images</button>
+    </div>
   </section>
 
 </main>
@@ -427,9 +440,28 @@ let assignments = {}; // { childId: {team:'A'|'B'|'blesse', mute:bool} }
 
 function toast(msg){
   const t = document.getElementById('toast');
-  t.textContent = msg;
+  t.innerHTML = escapeHtml(msg);
+  t.style.pointerEvents = 'none';
   t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+function undoToast(msg, undoFn){
+  const t = document.getElementById('toast');
+  t.innerHTML = `${escapeHtml(msg)} <button id="undoBtn" style="margin-left:10px; background:none; border:none; color:var(--amber); font-weight:700; font-size:13px; cursor:pointer; text-decoration:underline;">Annuler</button>`;
+  t.style.pointerEvents = 'auto';
+  t.classList.add('show');
+  let done = false;
+  const finish = ()=>{
+    if(done) return;
+    done = true;
+    t.classList.remove('show');
+  };
+  document.getElementById('undoBtn').addEventListener('click', ()=>{
+    undoFn();
+    finish();
+  });
+  setTimeout(finish, 5000);
 }
 
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
@@ -539,11 +571,17 @@ function sortedChildren(){
 
 function renderChildren(){
   const box = document.getElementById('childList');
+  const term = (document.getElementById('childSearch').value||'').trim().toLowerCase();
+  const list = sortedChildren().filter(c => !term || c.name.toLowerCase().includes(term));
   if(children.length === 0){
     box.innerHTML = '<div class="empty">Aucun enfant ajouté pour l\'instant.</div>';
     return;
   }
-  box.innerHTML = sortedChildren().map(c => `
+  if(list.length === 0){
+    box.innerHTML = '<div class="empty">Aucun résultat pour cette recherche.</div>';
+    return;
+  }
+  box.innerHTML = list.map(c => `
     <div class="list-item">
       <span>${escapeHtml(c.name)} <span class="star ${c.mute?'on':''}" data-id="${c.id}" title="Joueur muté" style="position:static; opacity:${c.mute?1:.35};">★</span></span>
       <button class="del" data-id="${c.id}" title="Supprimer">×</button>
@@ -551,9 +589,17 @@ function renderChildren(){
   `).join('');
   box.querySelectorAll('.del').forEach(b=>{
     b.addEventListener('click', ()=>{
-      children = children.filter(c=>c.id !== b.dataset.id);
+      const id = b.dataset.id;
+      const removedIndex = children.findIndex(c=>c.id===id);
+      const removed = children[removedIndex];
+      children = children.filter(c=>c.id !== id);
       saveChildren();
       renderChildren();
+      undoToast(`${removed.name} supprimé(e)`, ()=>{
+        children.splice(removedIndex, 0, removed);
+        saveChildren();
+        renderChildren();
+      });
     });
   });
   box.querySelectorAll('.star').forEach(s=>{
@@ -563,6 +609,9 @@ function renderChildren(){
     });
   });
 }
+
+document.getElementById('childSearch').addEventListener('input', renderChildren);
+
 
 document.getElementById('addChildBtn').addEventListener('click', ()=>{
   const input = document.getElementById('childName');
@@ -577,8 +626,80 @@ document.getElementById('childName').addEventListener('keydown', e=>{
   if(e.key === 'Enter') document.getElementById('addChildBtn').click();
 });
 
+// ---------- backup export/import ----------
+document.getElementById('exportDataBtn').addEventListener('click', ()=>{
+  const payload = {
+    effectif: children,
+    calendrier: matches,
+    titre: document.getElementById('clubTitle').value,
+    exportedAt: new Date().toISOString()
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `sauvegarde-convocations-${filenameDate(new Date().toISOString().slice(0,10))}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Sauvegarde téléchargée');
+});
+
+document.getElementById('importDataBtn').addEventListener('click', ()=>{
+  document.getElementById('importDataInput').click();
+});
+document.getElementById('importDataInput').addEventListener('change', e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async ev=>{
+    try{
+      const data = JSON.parse(ev.target.result);
+      if(Array.isArray(data.effectif)) children = data.effectif;
+      if(Array.isArray(data.calendrier)) matches = data.calendrier;
+      if(typeof data.titre === 'string') document.getElementById('clubTitle').value = data.titre;
+      await saveChildren();
+      await saveMatches();
+      await saveTitle();
+      renderChildren();
+      renderMatches();
+      renderMatchSelect();
+      toast('Sauvegarde restaurée');
+    }catch(err){
+      toast('Fichier de sauvegarde illisible');
+    }
+  };
+  reader.readAsText(file, 'UTF-8');
+  e.target.value = '';
+});
+
+
 // ---------- calendrier ----------
 let editingMatchTeam = null; // {matchId, team}
+
+function statusBadge(dateStr){
+  if(!dateStr) return '';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const d = new Date(dateStr+'T00:00:00');
+  if(isNaN(d)) return '';
+  const diffDays = Math.round((d-today)/86400000);
+  if(diffDays < 0) return `<span style="font-size:10.5px; font-weight:700; background:var(--line); color:#6b756e; padding:2px 7px; border-radius:8px;">passée</span>`;
+  if(diffDays === 0) return `<span style="font-size:10.5px; font-weight:700; background:#fcebeb; color:var(--red-dark); padding:2px 7px; border-radius:8px;">aujourd'hui</span>`;
+  if(diffDays === 1) return `<span style="font-size:10.5px; font-weight:700; background:#fdf2e2; color:var(--amber); padding:2px 7px; border-radius:8px;">demain</span>`;
+  if(diffDays <= 6) return `<span style="font-size:10.5px; font-weight:700; background:#fdf2e2; color:var(--amber); padding:2px 7px; border-radius:8px;">dans ${diffDays} jours</span>`;
+  return '';
+}
+
+function flashSaved(nearEl){
+  const check = document.createElement('span');
+  check.textContent = '✓';
+  check.style.cssText = 'color:var(--green); font-weight:700; margin-left:8px; opacity:0; transition:opacity .2s;';
+  nearEl.appendChild(check);
+  requestAnimationFrame(()=>{ check.style.opacity = '1'; });
+  setTimeout(()=>{
+    check.style.opacity = '0';
+    setTimeout(()=> check.remove(), 300);
+  }, 1200);
+}
 
 function matchLineHtml(m, team){
   const d = m[team];
@@ -586,8 +707,11 @@ function matchLineHtml(m, team){
   if(!d){
     return `<div class="meta"><b style="color:${color};">${team}</b> — <em>à compléter</em></div>`;
   }
-  return `<div class="meta match-line" data-id="${m.id}" data-team="${team}" style="cursor:pointer;">
-    <b style="color:${color};">${team}</b> — ${escapeHtml(d.label||'—')} ${d.date ? '· '+formatDate(d.date) : ''} · VS ${escapeHtml(d.adversaire||'—')} · ${escapeHtml(d.heure||'—')}
+  return `<div style="display:flex; align-items:center; gap:6px;">
+    <div class="meta match-line" data-id="${m.id}" data-team="${team}" style="cursor:pointer; flex:1;">
+      <b style="color:${color};">${team}</b> — ${escapeHtml(d.label||'—')} ${d.date ? '· '+formatDate(d.date) : ''} · VS ${escapeHtml(d.adversaire||'—')} · ${escapeHtml(d.heure||'—')} ${statusBadge(d.date)}
+    </div>
+    <button class="dup-btn" data-id="${m.id}" data-team="${team}" title="Dupliquer vers le formulaire" style="background:none; border:none; color:#8b978f; cursor:pointer; font-size:13px; padding:2px 4px;">⧉</button>
   </div>`;
 }
 
@@ -606,9 +730,15 @@ function matchEditFormHtml(m, team){
         <div class="field"><label>Lieu du RDV</label><input class="me-lieu" value="${p('lieu')}"></div>
       </div>
       <div class="field"><label>Adresse du stade</label><input class="me-adresse" value="${p('adresse')}"></div>
-      <button class="btn btn-primary me-save" style="margin-top:4px;">Enregistrer</button>
+      <span style="display:flex; align-items:center;"><button class="btn btn-primary me-save" style="margin-top:4px;">Enregistrer</button></span>
     </div>
   `;
+}
+
+function monthLabel(dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  let s = d.toLocaleDateString('fr-FR', {month:'long', year:'numeric'});
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function renderMatches(){
@@ -618,21 +748,41 @@ function renderMatches(){
     return;
   }
   const sorted = [...matches].sort((a,b)=> ((a.A&&a.A.date)||(a.B&&a.B.date)||'').localeCompare((b.A&&b.A.date)||(b.B&&b.B.date)||''));
-  box.innerHTML = sorted.map(m => `
-    <div class="list-item" style="align-items:flex-start;">
-      <div style="flex:1;">
-        ${editingMatchTeam && editingMatchTeam.matchId===m.id && editingMatchTeam.team==='A' ? matchEditFormHtml(m,'A') : matchLineHtml(m,'A')}
-        ${editingMatchTeam && editingMatchTeam.matchId===m.id && editingMatchTeam.team==='B' ? matchEditFormHtml(m,'B') : matchLineHtml(m,'B')}
+
+  let html = '';
+  let currentMonth = null;
+  sorted.forEach(m=>{
+    const d = (m.A&&m.A.date) || (m.B&&m.B.date) || '';
+    const monthKey = d ? d.slice(0,7) : 'sans-date';
+    if(monthKey !== currentMonth){
+      currentMonth = monthKey;
+      html += `<div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:#8b978f; margin:14px 0 6px;">${d ? monthLabel(d) : 'Sans date'}</div>`;
+    }
+    html += `
+      <div class="list-item" style="align-items:flex-start;">
+        <div style="flex:1;">
+          ${editingMatchTeam && editingMatchTeam.matchId===m.id && editingMatchTeam.team==='A' ? matchEditFormHtml(m,'A') : matchLineHtml(m,'A')}
+          ${editingMatchTeam && editingMatchTeam.matchId===m.id && editingMatchTeam.team==='B' ? matchEditFormHtml(m,'B') : matchLineHtml(m,'B')}
+        </div>
+        <button class="del" data-id="${m.id}" title="Supprimer">×</button>
       </div>
-      <button class="del" data-id="${m.id}" title="Supprimer">×</button>
-    </div>
-  `).join('');
+    `;
+  });
+  box.innerHTML = html;
 
   box.querySelectorAll('.del').forEach(b=>{
     b.addEventListener('click', ()=>{
-      matches = matches.filter(m=>m.id !== b.dataset.id);
+      const id = b.dataset.id;
+      const removedIndex = matches.findIndex(m=>m.id===id);
+      const removed = matches[removedIndex];
+      matches = matches.filter(m=>m.id !== id);
       saveMatches();
       renderMatches();
+      undoToast('Rencontre supprimée', ()=>{
+        matches.splice(removedIndex, 0, removed);
+        saveMatches();
+        renderMatches();
+      });
     });
   });
 
@@ -643,8 +793,26 @@ function renderMatches(){
     });
   });
 
+  box.querySelectorAll('.dup-btn').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      e.stopPropagation();
+      const m = matches.find(x=>x.id===btn.dataset.id);
+      const team = btn.dataset.team;
+      const d = m && m[team];
+      if(!d) return;
+      document.getElementById('label'+team).value = d.label||'';
+      document.getElementById('adv'+team).value = d.adversaire||'';
+      document.getElementById('heure'+team).value = d.heure||'';
+      document.getElementById('lieu'+team).value = d.lieu||'';
+      document.getElementById('adresse'+team).value = d.adresse||'';
+      document.getElementById('date'+team).value = '';
+      document.getElementById('date'+team).focus();
+      toast(`Équipe ${team} dupliquée — choisis la nouvelle date`);
+    });
+  });
+
   box.querySelectorAll('.match-edit-form').forEach(form=>{
-    form.querySelector('.me-save').addEventListener('click', ()=>{
+    form.querySelector('.me-save').addEventListener('click', (e)=>{
       const matchId = form.dataset.id, team = form.dataset.team;
       const m = matches.find(x=>x.id===matchId);
       if(m && m[team]){
@@ -658,11 +826,15 @@ function renderMatches(){
         };
         saveMatches();
       }
-      editingMatchTeam = null;
-      renderMatches();
+      flashSaved(e.target.parentElement);
+      setTimeout(()=>{
+        editingMatchTeam = null;
+        renderMatches();
+      }, 500);
     });
   });
 }
+
 
 function filenameDate(iso){
   if(!iso) return '';
@@ -870,7 +1042,9 @@ function renderMatchSelect(){
     return `<option value="${m.id}">${escapeHtml(label)}${date ? ' — ' + formatDate(date) : ''}</option>`;
   }).join('');
   if(!currentMatchId || !matches.find(m=>m.id===currentMatchId)){
-    currentMatchId = sorted[0].id;
+    const todayStr = new Date().toISOString().slice(0,10);
+    const upcoming = sorted.find(m => ((m.A&&m.A.date)||(m.B&&m.B.date)||'') >= todayStr);
+    currentMatchId = (upcoming || sorted[sorted.length-1]).id;
   }
   sel.value = currentMatchId;
   onMatchChange();
@@ -921,6 +1095,7 @@ function renderMatchInfo(){
         m[team][key] = input.value.trim();
         saveMatches();
         renderMatches();
+        flashSaved(input.parentElement);
       }
     });
   });
@@ -942,7 +1117,29 @@ function renderConvocationBody(){
       <span>★ Joueur muté (géré dans l'onglet Effectif)</span>
     </div>
     <div class="hint">Clic sur le nom : non sélectionné → Équipe A → Équipe B → non sélectionné. L'ordre des clics fixe l'ordre d'écriture dans la liste. Clic droit = blessé ou non convoqué.</div>
-    <div class="chips" id="chipBox"></div>
+    <div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:10px;">
+      <div style="flex:1; min-width:150px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <span style="font-size:12px; font-weight:700; text-transform:uppercase; color:var(--red-dark);">Équipe A</span>
+          <span id="countA" style="font-size:11px; font-weight:700; background:#fcebeb; color:var(--red-dark); padding:2px 8px; border-radius:10px;">0</span>
+        </div>
+        <div class="chips" id="chipBoxA"></div>
+      </div>
+      <div style="flex:1; min-width:150px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <span style="font-size:12px; font-weight:700; text-transform:uppercase; color:var(--royalblue);">Équipe B</span>
+          <span id="countB" style="font-size:11px; font-weight:700; background:#e8edf9; color:var(--royalblue); padding:2px 8px; border-radius:10px;">0</span>
+        </div>
+        <div class="chips" id="chipBoxB"></div>
+      </div>
+      <div style="flex:1; min-width:150px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <span style="font-size:12px; font-weight:700; text-transform:uppercase; color:#8b978f;">Reste à placer</span>
+          <span id="countRest" style="font-size:11px; font-weight:700; background:var(--bg); color:#6b756e; padding:2px 8px; border-radius:10px;">0</span>
+        </div>
+        <div class="chips" id="chipBoxRest"></div>
+      </div>
+    </div>
   `;
   renderChips();
 }
@@ -964,16 +1161,27 @@ function closeCtxMenu(){
   if(existing) existing.remove();
 }
 
-function renderChips(){
-  const chipBox = document.getElementById('chipBox');
-  chipBox.innerHTML = sortedChildren().map(c=>{
-    const a = getAssign(c.id);
-    const cls = a.team === 'A' ? 'state-A' : (a.team === 'B' ? 'state-B' : (a.team === 'blesse' ? 'state-blesse' : (a.team === 'absent' ? 'state-absent' : '')));
-    const badge = (a.team === 'A' || a.team === 'B') && a.order ? `<span class="order-badge">${a.order}</span>` : '';
-    return `<div class="chip ${cls}" data-id="${c.id}">${badge}${escapeHtml(c.name)}${c.mute ? '<span class="star on">★</span>' : ''}</div>`;
-  }).join('');
+function chipHtml(c){
+  const a = getAssign(c.id);
+  const cls = a.team === 'A' ? 'state-A' : (a.team === 'B' ? 'state-B' : (a.team === 'blesse' ? 'state-blesse' : (a.team === 'absent' ? 'state-absent' : '')));
+  const badge = (a.team === 'A' || a.team === 'B') && a.order ? `<span class="order-badge">${a.order}</span>` : '';
+  return `<div class="chip ${cls}" data-id="${c.id}">${badge}${escapeHtml(c.name)}${c.mute ? '<span class="star on">★</span>' : ''}</div>`;
+}
 
-  chipBox.querySelectorAll('.chip').forEach(chip=>{
+function renderChips(){
+  const all = sortedChildren();
+  const teamA = all.filter(c => getAssign(c.id).team === 'A').sort((a,b)=> getAssign(a.id).order - getAssign(b.id).order);
+  const teamB = all.filter(c => getAssign(c.id).team === 'B').sort((a,b)=> getAssign(a.id).order - getAssign(b.id).order);
+  const rest = all.filter(c => !['A','B'].includes(getAssign(c.id).team));
+
+  document.getElementById('chipBoxA').innerHTML = teamA.map(chipHtml).join('') || '<span class="empty" style="padding:6px 0;">—</span>';
+  document.getElementById('chipBoxB').innerHTML = teamB.map(chipHtml).join('') || '<span class="empty" style="padding:6px 0;">—</span>';
+  document.getElementById('chipBoxRest').innerHTML = rest.map(chipHtml).join('') || '<span class="empty" style="padding:6px 0;">—</span>';
+  document.getElementById('countA').textContent = teamA.length;
+  document.getElementById('countB').textContent = teamB.length;
+  document.getElementById('countRest').textContent = rest.length;
+
+  document.querySelectorAll('#convocationBody .chip').forEach(chip=>{
     chip.addEventListener('click', ()=>{
       closeCtxMenu();
       const id = chip.dataset.id;
@@ -1268,15 +1476,34 @@ async function renderConvocationImage(m, teamKey, players, wrap){
   h3.textContent = 'Équipe ' + teamKey;
   block.appendChild(h3);
   block.appendChild(canvas);
+
+  const teamNum = teamKey === 'A' ? '1' : '2';
+  const dateForName = filenameDate(info.date);
+  const filename = `Convocatoria${dateForName ? '_' + dateForName : ''}_(${teamNum}).png`;
+
   const link = document.createElement('a');
   link.className = 'btn btn-primary save-link';
   link.textContent = "Télécharger l'image Équipe " + teamKey;
   link.href = canvas.toDataURL('image/png');
-  const teamNum = teamKey === 'A' ? '1' : '2';
-  const dateForName = filenameDate(info.date);
-  link.download = `Convocatoria${dateForName ? '_' + dateForName : ''}_(${teamNum}).png`;
+  link.download = filename;
   block.appendChild(document.createElement('br'));
   block.appendChild(link);
+
+  canvas.toBlob(blob=>{
+    if(!blob) return;
+    const file = new File([blob], filename, {type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      const shareBtn = document.createElement('button');
+      shareBtn.className = 'btn btn-amber save-link';
+      shareBtn.style.marginLeft = '8px';
+      shareBtn.textContent = 'Partager Équipe ' + teamKey;
+      shareBtn.addEventListener('click', ()=>{
+        navigator.share({files:[file], title: filename}).catch(()=>{});
+      });
+      block.appendChild(shareBtn);
+    }
+  }, 'image/png');
+
   wrap.appendChild(block);
 }
 
