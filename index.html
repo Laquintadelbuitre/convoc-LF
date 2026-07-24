@@ -578,6 +578,39 @@ document.getElementById('childName').addEventListener('keydown', e=>{
 });
 
 // ---------- calendrier ----------
+let editingMatchTeam = null; // {matchId, team}
+
+function matchLineHtml(m, team){
+  const d = m[team];
+  const color = team === 'A' ? 'var(--red-dark)' : 'var(--royalblue)';
+  if(!d){
+    return `<div class="meta"><b style="color:${color};">${team}</b> — <em>à compléter</em></div>`;
+  }
+  return `<div class="meta match-line" data-id="${m.id}" data-team="${team}" style="cursor:pointer;">
+    <b style="color:${color};">${team}</b> — ${escapeHtml(d.label||'—')} ${d.date ? '· '+formatDate(d.date) : ''} · VS ${escapeHtml(d.adversaire||'—')} · ${escapeHtml(d.heure||'—')}
+  </div>`;
+}
+
+function matchEditFormHtml(m, team){
+  const d = m[team] || {};
+  const p = key => escapeHtml(d[key]||'');
+  return `
+    <div class="match-edit-form" data-id="${m.id}" data-team="${team}" style="border:1px solid var(--line); border-radius:8px; padding:10px; margin:6px 0;">
+      <div class="row2">
+        <div class="field"><label>Libellé</label><input class="me-label" value="${p('label')}"></div>
+        <div class="field"><label>Date</label><input class="me-date" type="date" value="${p('date')}"></div>
+      </div>
+      <div class="field"><label>Adversaire</label><input class="me-adversaire" value="${p('adversaire')}"></div>
+      <div class="row2">
+        <div class="field"><label>Heure du RDV</label><input class="me-heure" value="${p('heure')}"></div>
+        <div class="field"><label>Lieu du RDV</label><input class="me-lieu" value="${p('lieu')}"></div>
+      </div>
+      <div class="field"><label>Adresse du stade</label><input class="me-adresse" value="${p('adresse')}"></div>
+      <button class="btn btn-primary me-save" style="margin-top:4px;">Enregistrer</button>
+    </div>
+  `;
+}
+
 function renderMatches(){
   const box = document.getElementById('matchList');
   if(matches.length === 0){
@@ -586,18 +619,46 @@ function renderMatches(){
   }
   const sorted = [...matches].sort((a,b)=> ((a.A&&a.A.date)||(a.B&&a.B.date)||'').localeCompare((b.A&&b.A.date)||(b.B&&b.B.date)||''));
   box.innerHTML = sorted.map(m => `
-    <div class="list-item">
-      <div>
-        <div class="meta"><b style="color:var(--red-dark);">A</b> — ${m.A ? `${escapeHtml(m.A.label||'—')} ${m.A.date ? '· '+formatDate(m.A.date) : ''} · VS ${escapeHtml(m.A.adversaire||'—')} · ${escapeHtml(m.A.heure||'—')}` : '<em>à compléter</em>'}</div>
-        <div class="meta"><b style="color:var(--royalblue);">B</b> — ${m.B ? `${escapeHtml(m.B.label||'—')} ${m.B.date ? '· '+formatDate(m.B.date) : ''} · VS ${escapeHtml(m.B.adversaire||'—')} · ${escapeHtml(m.B.heure||'—')}` : '<em>à compléter</em>'}</div>
+    <div class="list-item" style="align-items:flex-start;">
+      <div style="flex:1;">
+        ${editingMatchTeam && editingMatchTeam.matchId===m.id && editingMatchTeam.team==='A' ? matchEditFormHtml(m,'A') : matchLineHtml(m,'A')}
+        ${editingMatchTeam && editingMatchTeam.matchId===m.id && editingMatchTeam.team==='B' ? matchEditFormHtml(m,'B') : matchLineHtml(m,'B')}
       </div>
       <button class="del" data-id="${m.id}" title="Supprimer">×</button>
     </div>
   `).join('');
+
   box.querySelectorAll('.del').forEach(b=>{
     b.addEventListener('click', ()=>{
       matches = matches.filter(m=>m.id !== b.dataset.id);
       saveMatches();
+      renderMatches();
+    });
+  });
+
+  box.querySelectorAll('.match-line').forEach(line=>{
+    line.addEventListener('click', ()=>{
+      editingMatchTeam = {matchId: line.dataset.id, team: line.dataset.team};
+      renderMatches();
+    });
+  });
+
+  box.querySelectorAll('.match-edit-form').forEach(form=>{
+    form.querySelector('.me-save').addEventListener('click', ()=>{
+      const matchId = form.dataset.id, team = form.dataset.team;
+      const m = matches.find(x=>x.id===matchId);
+      if(m && m[team]){
+        m[team] = {
+          label: form.querySelector('.me-label').value.trim(),
+          date: form.querySelector('.me-date').value,
+          adversaire: form.querySelector('.me-adversaire').value.trim(),
+          heure: form.querySelector('.me-heure').value.trim(),
+          lieu: form.querySelector('.me-lieu').value.trim(),
+          adresse: form.querySelector('.me-adresse').value.trim()
+        };
+        saveMatches();
+      }
+      editingMatchTeam = null;
       renderMatches();
     });
   });
@@ -827,16 +888,42 @@ async function onMatchChange(){
   renderConvocationBody();
 }
 
+function miField(team, key, value, placeholder){
+  return `<input class="mi-edit" data-team="${team}" data-key="${key}" value="${escapeHtml(value||'')}" placeholder="${placeholder}"
+    style="width:100%; margin-top:6px; padding:6px 8px; border:none; border-radius:6px; font-size:12.5px; background:rgba(255,255,255,.9); color:#222;">`;
+}
+
 function renderMatchInfo(){
   const m = matches.find(x=>x.id === currentMatchId);
   const box = document.getElementById('matchInfoBox');
   if(!m){ box.innerHTML=''; return; }
   box.innerHTML = `
     <div class="match-info">
-      <div class="card a">${m.A ? `<b>VS ${escapeHtml(m.A.adversaire||'—')}</b>${m.A.date ? formatDate(m.A.date)+' · ' : ''}${escapeHtml(m.A.heure||'—')} · ${escapeHtml(m.A.lieu||'—')}` : '<b>Équipe A</b>à compléter dans Calendrier'}</div>
-      <div class="card b">${m.B ? `<b>VS ${escapeHtml(m.B.adversaire||'—')}</b>${m.B.date ? formatDate(m.B.date)+' · ' : ''}${escapeHtml(m.B.heure||'—')} · ${escapeHtml(m.B.lieu||'—')}` : '<b>Équipe B</b>à compléter dans Calendrier'}</div>
+      <div class="card a">${m.A ? `
+          <b>VS ${escapeHtml(m.A.adversaire||'—')}</b>${m.A.date ? formatDate(m.A.date) : ''}
+          ${miField('A','heure', m.A.heure, 'Heure du RDV')}
+          ${miField('A','lieu', m.A.lieu, 'Lieu du RDV')}
+          ${miField('A','adresse', m.A.adresse, 'Adresse du stade')}
+        ` : '<b>Équipe A</b>à compléter dans Calendrier'}</div>
+      <div class="card b">${m.B ? `
+          <b>VS ${escapeHtml(m.B.adversaire||'—')}</b>${m.B.date ? formatDate(m.B.date) : ''}
+          ${miField('B','heure', m.B.heure, 'Heure du RDV')}
+          ${miField('B','lieu', m.B.lieu, 'Lieu du RDV')}
+          ${miField('B','adresse', m.B.adresse, 'Adresse du stade')}
+        ` : '<b>Équipe B</b>à compléter dans Calendrier'}</div>
     </div>
+    <div class="hint" style="margin-top:-8px;">Heure, lieu et adresse sont modifiables ici directement — utile après un import CSV.</div>
   `;
+  box.querySelectorAll('.mi-edit').forEach(input=>{
+    input.addEventListener('change', ()=>{
+      const team = input.dataset.team, key = input.dataset.key;
+      if(m[team]){
+        m[team][key] = input.value.trim();
+        saveMatches();
+        renderMatches();
+      }
+    });
+  });
 }
 
 function renderConvocationBody(){
