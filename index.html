@@ -138,7 +138,7 @@
     margin-bottom:4px;
     font-weight:600;
   }
-  .field input, .field select{
+  .field input, .field select, .field textarea{
     width:100%;
     padding:9px 10px;
     border:1px solid var(--line);
@@ -317,13 +317,13 @@
 
   <section class="panel" id="panel-effectif">
     <h2>Liste des enfants</h2>
+
     <div class="field">
-      <label>Nom de l'enfant</label>
-      <div class="row2">
-        <input id="childName" placeholder="Prénom Nom" maxlength="40">
-        <div style="flex:0 0 auto;"><button class="btn btn-primary" id="addChildBtn">Ajouter</button></div>
-      </div>
+      <label>Ajouter des enfants (un prénom par ligne)</label>
+      <textarea id="bulkChildNames" rows="4" placeholder="Hadi&#10;Sebastien&#10;Mickaël"></textarea>
+      <button class="btn btn-primary" id="addBulkChildBtn" style="margin-top:8px;">Ajouter la liste</button>
     </div>
+
     <div class="field">
       <input id="childSearch" placeholder="Rechercher un enfant...">
     </div>
@@ -613,17 +613,15 @@ function renderChildren(){
 document.getElementById('childSearch').addEventListener('input', renderChildren);
 
 
-document.getElementById('addChildBtn').addEventListener('click', ()=>{
-  const input = document.getElementById('childName');
-  const name = input.value.trim();
-  if(!name) return;
-  children.push({id: uid(), name});
-  input.value = '';
+document.getElementById('addBulkChildBtn').addEventListener('click', ()=>{
+  const textarea = document.getElementById('bulkChildNames');
+  const names = textarea.value.split('\n').map(s=>s.trim()).filter(Boolean);
+  if(names.length === 0){ toast('Aucun prénom détecté'); return; }
+  names.forEach(name => children.push({id: uid(), name, mute: MUTED_NAMES.includes(name)}));
+  textarea.value = '';
   saveChildren();
   renderChildren();
-});
-document.getElementById('childName').addEventListener('keydown', e=>{
-  if(e.key === 'Enter') document.getElementById('addChildBtn').click();
+  toast(`${names.length} enfant(s) ajouté(s)`);
 });
 
 // ---------- backup export/import ----------
