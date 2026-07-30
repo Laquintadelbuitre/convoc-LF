@@ -319,7 +319,7 @@
     <h2>Liste des enfants</h2>
 
     <div class="field">
-      <label>Ajouter des enfants (un prénom par ligne)</label>
+      <label>Ajouter des enfants (un prénom par ligne — ajoute "(muté)" après un prénom pour le marquer directement)</label>
       <textarea id="bulkChildNames" rows="4" placeholder="Hadi&#10;Sebastien&#10;Mickaël"></textarea>
       <button class="btn btn-primary" id="addBulkChildBtn" style="margin-top:8px;">Ajouter la liste</button>
     </div>
@@ -467,8 +467,9 @@ function undoToast(msg, undoFn){
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
 // ---------- persistence ----------
-const DEFAULT_ROSTER = ["Hadi","Sebastien","Mickaël","Bakoutoubo","Sacha","Keys","Nourou","Yanis","Mathis","Ethan","Abdoul Karim","Jalil","Gabin","Adam","Kalifa","Bilel","Pablo","Melih","Issam","Emir","Loan","Sarah"];
-const MUTED_NAMES = ["Adam","Mickaël","Yanis","Ethan","Mathis"];
+const DEFAULT_ROSTER = ["Hadi","Sebastien","Mickaël","Bakoutoubo","Sacha","Keys","Nourou","Yanis","Mathis","Ethan","Abdoul Karim","Jalil","Gabin","Adam","Kalifa","Bilel","Pablo","Melih","Issam","Emir","Loan","Sarah","Shayan","Chahine","Salman","Tasilimi","Theo","Rafael","Matteo","Elias","Nylan","Ethanmoise","Simon","Milan","Kennely","Jibril"];
+const MUTED_NAMES = ["Adam","Mickaël","Yanis","Ethan","Mathis","Shayan","Rafael","Nylan"];
+const U12_NAMES = ["Shayan","Chahine","Salman","Tasilimi","Theo","Rafael","Matteo","Elias","Nylan","Ethanmoise","Simon","Milan","Kennely","Jibril"];
 
 // Returns the most recent Sunday 23:59 that has already passed (the last weekly reset boundary).
 function mostRecentSundayReset(now){
@@ -505,15 +506,16 @@ async function loadAll(){
     const c = await store.get('effectif', false);
     if(c){
       children = JSON.parse(c.value);
-      // migrate: give every child a permanent `mute` flag; only seed it the first time
-      // (from the known muted-players list) so a later manual change sticks.
+      // migrate: give every child a permanent `mute` flag and `category` label; only seed
+      // them the first time (from the known lists) so a later manual change sticks.
       let changed = false;
       children.forEach(ch=>{
         if(typeof ch.mute !== 'boolean'){ ch.mute = MUTED_NAMES.includes(ch.name); changed = true; }
+        if(typeof ch.category !== 'string'){ ch.category = U12_NAMES.includes(ch.name) ? 'U12' : ''; changed = true; }
       });
       if(changed) await store.set('effectif', JSON.stringify(children), false);
     } else {
-      children = DEFAULT_ROSTER.map(name => ({id: uid(), name, mute: MUTED_NAMES.includes(name)}));
+      children = DEFAULT_ROSTER.map(name => ({id: uid(), name, mute: MUTED_NAMES.includes(name), category: U12_NAMES.includes(name) ? 'U12' : ''}));
       await store.set('effectif', JSON.stringify(children), false);
     }
   }catch(e){ children = []; }
@@ -583,7 +585,7 @@ function renderChildren(){
   }
   box.innerHTML = list.map(c => `
     <div class="list-item">
-      <span>${escapeHtml(c.name)} <span class="star ${c.mute?'on':''}" data-id="${c.id}" title="Joueur muté" style="position:static; opacity:${c.mute?1:.35};">★</span></span>
+      <span>${escapeHtml(c.name)}${c.category ? ` <span style="color:#8b978f; font-weight:600; font-size:12px;">(${escapeHtml(c.category)})</span>` : ''} <span class="star ${c.mute?'on':''}" data-id="${c.id}" title="Joueur muté" style="position:static; opacity:${c.mute?1:.35};">★</span></span>
       <button class="del" data-id="${c.id}" title="Supprimer">×</button>
     </div>
   `).join('');
@@ -615,13 +617,27 @@ document.getElementById('childSearch').addEventListener('input', renderChildren)
 
 document.getElementById('addBulkChildBtn').addEventListener('click', ()=>{
   const textarea = document.getElementById('bulkChildNames');
-  const names = textarea.value.split('\n').map(s=>s.trim()).filter(Boolean);
-  if(names.length === 0){ toast('Aucun prénom détecté'); return; }
-  names.forEach(name => children.push({id: uid(), name, mute: MUTED_NAMES.includes(name)}));
+  const rawLines = textarea.value.split('\n').map(s=>s.trim()).filter(Boolean);
+  if(rawLines.length === 0){ toast('Aucun prénom détecté'); return; }
+  const entries = rawLines.map(line=>{
+    let mute = false, category = '';
+    const name = line.replace(/\(([^)]*)\)/g, (full, inner)=>{
+      const norm = inner.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+      if(norm.includes('mut')) mute = true;
+      if(norm.includes('u12')) category = 'U12';
+      return '';
+    }).trim().replace(/\s+/g,' ');
+    return {
+      name,
+      mute: mute || MUTED_NAMES.includes(name),
+      category: category || (U12_NAMES.includes(name) ? 'U12' : '')
+    };
+  });
+  entries.forEach(({name, mute, category}) => children.push({id: uid(), name, mute, category}));
   textarea.value = '';
   saveChildren();
   renderChildren();
-  toast(`${names.length} enfant(s) ajouté(s)`);
+  toast(`${entries.length} enfant(s) ajouté(s)`);
 });
 
 // ---------- backup export/import ----------
@@ -1163,7 +1179,7 @@ function chipHtml(c){
   const a = getAssign(c.id);
   const cls = a.team === 'A' ? 'state-A' : (a.team === 'B' ? 'state-B' : (a.team === 'blesse' ? 'state-blesse' : (a.team === 'absent' ? 'state-absent' : '')));
   const badge = (a.team === 'A' || a.team === 'B') && a.order ? `<span class="order-badge">${a.order}</span>` : '';
-  return `<div class="chip ${cls}" data-id="${c.id}">${badge}${escapeHtml(c.name)}${c.mute ? '<span class="star on">★</span>' : ''}</div>`;
+  return `<div class="chip ${cls}" data-id="${c.id}">${badge}${escapeHtml(c.name)}${c.category ? ` <span style="opacity:.75; font-weight:600;">(${escapeHtml(c.category)})</span>` : ''}${c.mute ? '<span class="star on">★</span>' : ''}</div>`;
 }
 
 function renderChips(){
