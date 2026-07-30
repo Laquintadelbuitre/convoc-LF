@@ -202,6 +202,9 @@
     flex-wrap:wrap;
     gap:8px;
     margin-top:6px;
+    min-height:40px;
+    border-radius:8px;
+    transition:outline .1s;
   }
   .chip{
     position:relative;
@@ -213,6 +216,7 @@
     user-select:none;
     background:var(--beige);
     color:#4a4030;
+    touch-action:none;
   }
   .chip .order-badge{
     display:inline-flex;
@@ -470,6 +474,7 @@ function uid(){ return Date.now().toString(36) + Math.random().toString(36).slic
 const DEFAULT_ROSTER = ["Hadi","Sebastien","Mickaël","Bakoutoubo","Sacha","Keys","Nourou","Yanis","Mathis","Ethan","Abdoul Karim","Jalil","Gabin","Adam","Kalifa","Bilel","Pablo","Melih","Issam","Emir","Loan","Sarah","Shayan","Chahine","Salman","Tasilimi","Theo","Rafael","Matteo","Elias","Nylan","Ethanmoise","Simon","Milan","Kennely","Jibril"];
 const MUTED_NAMES = ["Adam","Mickaël","Yanis","Ethan","Mathis","Shayan","Rafael","Nylan"];
 const U12_NAMES = ["Shayan","Chahine","Salman","Tasilimi","Theo","Rafael","Matteo","Elias","Nylan","Ethanmoise","Simon","Milan","Kennely","Jibril"];
+const U13_NAMES = ["Hadi","Sebastien","Mickaël","Bakoutoubo","Sacha","Keys","Nourou","Yanis","Mathis","Ethan","Abdoul Karim","Jalil","Gabin","Adam","Kalifa","Bilel","Pablo","Melih","Issam","Emir","Loan","Sarah"];
 
 // Returns the most recent Sunday 23:59 that has already passed (the last weekly reset boundary).
 function mostRecentSundayReset(now){
@@ -511,11 +516,11 @@ async function loadAll(){
       let changed = false;
       children.forEach(ch=>{
         if(typeof ch.mute !== 'boolean'){ ch.mute = MUTED_NAMES.includes(ch.name); changed = true; }
-        if(typeof ch.category !== 'string'){ ch.category = U12_NAMES.includes(ch.name) ? 'U12' : ''; changed = true; }
+        if(typeof ch.category !== 'string'){ ch.category = U12_NAMES.includes(ch.name) ? 'U12' : (U13_NAMES.includes(ch.name) ? 'U13' : ''); changed = true; }
       });
       if(changed) await store.set('effectif', JSON.stringify(children), false);
     } else {
-      children = DEFAULT_ROSTER.map(name => ({id: uid(), name, mute: MUTED_NAMES.includes(name), category: U12_NAMES.includes(name) ? 'U12' : ''}));
+      children = DEFAULT_ROSTER.map(name => ({id: uid(), name, mute: MUTED_NAMES.includes(name), category: U12_NAMES.includes(name) ? 'U12' : (U13_NAMES.includes(name) ? 'U13' : '')}));
       await store.set('effectif', JSON.stringify(children), false);
     }
   }catch(e){ children = []; }
@@ -625,12 +630,13 @@ document.getElementById('addBulkChildBtn').addEventListener('click', ()=>{
       const norm = inner.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
       if(norm.includes('mut')) mute = true;
       if(norm.includes('u12')) category = 'U12';
+      if(norm.includes('u13')) category = 'U13';
       return '';
     }).trim().replace(/\s+/g,' ');
     return {
       name,
       mute: mute || MUTED_NAMES.includes(name),
-      category: category || (U12_NAMES.includes(name) ? 'U12' : '')
+      category: category || (U12_NAMES.includes(name) ? 'U12' : (U13_NAMES.includes(name) ? 'U13' : ''))
     };
   });
   entries.forEach(({name, mute, category}) => children.push({id: uid(), name, mute, category}));
@@ -1191,14 +1197,29 @@ function renderChips(){
   document.getElementById('chipBoxA').innerHTML = teamA.map(chipHtml).join('') || '<span class="empty" style="padding:6px 0;">—</span>';
   document.getElementById('chipBoxB').innerHTML = teamB.map(chipHtml).join('') || '<span class="empty" style="padding:6px 0;">—</span>';
   document.getElementById('chipBoxRest').innerHTML = rest.map(chipHtml).join('') || '<span class="empty" style="padding:6px 0;">—</span>';
+  document.getElementById('chipBoxA').dataset.team = 'A';
+  document.getElementById('chipBoxB').dataset.team = 'B';
+  document.getElementById('chipBoxRest').dataset.team = 'rest';
   document.getElementById('countA').textContent = teamA.length;
   document.getElementById('countB').textContent = teamB.length;
   document.getElementById('countRest').textContent = rest.length;
 
   document.querySelectorAll('#convocationBody .chip').forEach(chip=>{
-    chip.addEventListener('click', ()=>{
-      closeCtxMenu();
-      const id = chip.dataset.id;
+    let startX=0, startY=0, dragging=false, ghost=null, dropTarget=null;
+    const DRAG_THRESHOLD = 8;
+
+    function assignToColumn(id, teamKey){
+      const a = getAssign(id);
+      if(teamKey === 'rest'){
+        assignments[id] = {team: undefined, order: undefined};
+      } else if(a.team !== teamKey){
+        assignments[id] = {team: teamKey, order: nextOrder()};
+      }
+      saveAssignments();
+      renderChips();
+    }
+
+    function cycleClick(id){
       const a = getAssign(id);
       if(a.team === 'blesse' || a.team === 'absent'){
         assignments[id] = {team: undefined, order: undefined};
@@ -1213,7 +1234,63 @@ function renderChips(){
       }
       saveAssignments();
       renderChips();
+    }
+
+    function clearDropHighlight(){
+      document.querySelectorAll('.chips').forEach(el=> el.style.outline = 'none');
+    }
+
+    function onPointerMove(e){
+      const dx = e.clientX - startX, dy = e.clientY - startY;
+      if(!dragging && Math.hypot(dx,dy) > DRAG_THRESHOLD){
+        dragging = true;
+        closeCtxMenu();
+        chip.style.opacity = '.35';
+        ghost = chip.cloneNode(true);
+        ghost.style.position = 'fixed';
+        ghost.style.pointerEvents = 'none';
+        ghost.style.zIndex = '200';
+        ghost.style.width = chip.getBoundingClientRect().width + 'px';
+        ghost.style.boxShadow = '0 4px 14px rgba(0,0,0,.25)';
+        document.body.appendChild(ghost);
+      }
+      if(dragging){
+        ghost.style.left = (e.clientX - ghost.offsetWidth/2) + 'px';
+        ghost.style.top = (e.clientY - 18) + 'px';
+        clearDropHighlight();
+        dropTarget = null;
+        const under = document.elementFromPoint(e.clientX, e.clientY);
+        const col = under && under.closest ? under.closest('.chips') : null;
+        if(col && col.dataset.team){
+          dropTarget = col;
+          col.style.outline = '2px dashed var(--amber)';
+        }
+      }
+    }
+
+    function onPointerUp(e){
+      document.removeEventListener('pointermove', onPointerMove);
+      document.removeEventListener('pointerup', onPointerUp);
+      chip.style.opacity = '';
+      if(dragging){
+        clearDropHighlight();
+        if(ghost) ghost.remove();
+        if(dropTarget) assignToColumn(chip.dataset.id, dropTarget.dataset.team);
+      } else {
+        cycleClick(chip.dataset.id);
+      }
+      dragging = false;
+      ghost = null;
+      dropTarget = null;
+    }
+
+    chip.addEventListener('pointerdown', e=>{
+      if(e.button !== undefined && e.button !== 0) return; // left click / touch only
+      startX = e.clientX; startY = e.clientY;
+      document.addEventListener('pointermove', onPointerMove);
+      document.addEventListener('pointerup', onPointerUp);
     });
+
     chip.addEventListener('contextmenu', e=>{
       e.preventDefault();
       closeCtxMenu();
