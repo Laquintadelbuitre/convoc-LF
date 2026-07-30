@@ -1114,7 +1114,7 @@ function renderConvocationBody(){
       <span><span class="dot" style="background:var(--darkgray)"></span>Non convoqué</span>
       <span>★ Joueur muté (géré dans l'onglet Effectif)</span>
     </div>
-    <div class="hint">Clic sur le nom : non sélectionné → Équipe A → Équipe B → non sélectionné. L'ordre des clics fixe l'ordre d'écriture dans la liste. Clic droit = blessé ou non convoqué.</div>
+    <div class="hint">Clic sur le nom : les 12 premiers joueurs cliqués passent en Équipe A, les suivants en Équipe B automatiquement — reclique pour basculer manuellement, un 3e clic désélectionne. L'ordre des clics fixe l'ordre d'écriture dans la liste. Clic droit = blessé ou non convoqué.</div>
     <div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:10px;">
       <div style="flex:1; min-width:150px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
@@ -1187,7 +1187,9 @@ function renderChips(){
       if(a.team === 'blesse' || a.team === 'absent'){
         assignments[id] = {team: undefined, order: undefined};
       } else if(!a.team){
-        assignments[id] = {team:'A', order: nextOrder()};
+        const countA = Object.values(assignments).filter(x=>x.team==='A').length;
+        const defaultTeam = countA < 12 ? 'A' : 'B';
+        assignments[id] = {team: defaultTeam, order: nextOrder()};
       } else if(a.team === 'A'){
         assignments[id] = {team:'B', order: a.order};
       } else {
