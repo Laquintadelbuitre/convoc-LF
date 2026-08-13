@@ -29,9 +29,6 @@
     --ink: #14231a;
     --card: #ffffff;
     --line: #e1e6dd;
-    
-    --status-blesse: #e67e22;
-    --status-absent: #7f8c8d;
   }
 
   * { box-sizing: border-box; }
@@ -333,7 +330,7 @@
   <section class="panel" id="panel-import">
     <h2>Importer un calendrier (Excel)</h2>
     <p class="hint" style="margin-top:-6px;">
-      Sélectionne l'équipe puis glisse ton fichier <strong>.xlsx</strong>. Les données lues automatiquement : <strong>Date (Col C)</strong>, <strong>Adversaire (Col D)</strong> et <strong>Adresse (Col K)</strong>.
+      Sélectionne l'équipe puis glisse ton fichier <strong>.xlsx</strong>. Les données extraites : <strong>Date (Col C)</strong>, <strong>Adversaire (Col D)</strong> et <strong>Adresse (Col K)</strong>.
     </p>
 
     <div class="two-col" style="margin-bottom:14px;">
@@ -415,26 +412,23 @@
       const data = new Uint8Array(e.target.result);
       const workbook = XLSX.read(data, { type: 'array', cellDates: true });
       
-      // Récupère la première feuille
       const firstSheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[firstSheetName];
       
-      // Convertit les cellules en tableau JavaScript
       const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
       
       const selectedTeam = document.querySelector('input[name="excelTeam"]:checked').value;
       const importedMatches = [];
 
-      // Parcours à partir de la ligne 3 (index 2 dans le tableau JS)
+      // Parcours à partir de la ligne 3 Excel (index 2 dans le tableau JS)
       for (let i = 2; i < rows.length; i++) {
         const row = rows[i];
         if (!row) continue;
 
         const dateVal = row[2] ? row[2].toString().trim() : '';      // Colonne C
         const advVal = row[3] ? row[3].toString().trim() : '';       // Colonne D
-        const adresseVal = row[10] ? row[10].toString().trim() : ''; // Colonne K (index 10)
+        const adresseVal = row[10] ? row[10].toString().trim() : ''; // Colonne K
 
-        // On retient la ligne seulement si un adversaire est présent
         if (advVal !== '') {
           importedMatches.push({
             team: selectedTeam,
