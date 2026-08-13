@@ -920,6 +920,23 @@ function parseFrenchDateStr(s){
   return '';
 }
 
+function cellToDateStr(val){
+  if(val instanceof Date && !isNaN(val)){
+    const y = val.getUTCFullYear();
+    const m = String(val.getUTCMonth()+1).padStart(2,'0');
+    const d = String(val.getUTCDate()).padStart(2,'0');
+    return `${y}-${m}-${d}`;
+  }
+  if(typeof val === 'number' && isFinite(val)){
+    try{
+      const parsed = XLSX.SSF.parse_date_code(val);
+      if(parsed) return `${parsed.y}-${String(parsed.m).padStart(2,'0')}-${String(parsed.d).padStart(2,'0')}`;
+    }catch(e){}
+  }
+  if(typeof val === 'string') return parseFrenchDateStr(val);
+  return '';
+}
+
 function findHeaderRow(rows){
   const stripAccents = s => (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   for(let i=0; i<Math.min(rows.length,10); i++){
@@ -935,7 +952,7 @@ function parseExcelWorkbook(workbook){
   const stripAccents = s => (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   for(const sheetName of workbook.SheetNames){
     const sheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json(sheet, {header:1, raw:false, defval:''});
+    const rows = XLSX.utils.sheet_to_json(sheet, {header:1, raw:true, defval:''});
     const headerIdx = findHeaderRow(rows);
     if(headerIdx === -1) continue;
 
@@ -950,7 +967,7 @@ function parseExcelWorkbook(workbook){
 
     return rows.slice(headerIdx+1)
       .map(r=>({
-        date: parseFrenchDateStr(r[col.date]),
+        date: cellToDateStr(r[col.date]),
         adversaire: (r[col.adversaire]||'').toString().trim(),
         heure: '',
         lieu: '',
@@ -1005,7 +1022,7 @@ function handleCsvFile(file){
   reader.onload = e=>{
     try{
       const data = new Uint8Array(e.target.result);
-      const workbook = XLSX.read(data, {type:'array'});
+      const workbook = XLSX.read(data, {type:'array', cellDates:true});
       csvPreviewRows = parseExcelWorkbook(workbook);
       if(csvPreviewRows.length === 0){ toast('Aucune rencontre des 21 prochains jours reconnue dans ce fichier'); }
       renderCsvPreview();
