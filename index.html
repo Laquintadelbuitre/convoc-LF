@@ -6,6 +6,7 @@
 <title>Convocations</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
     --pitch-dark:#12321f;
@@ -313,7 +314,7 @@
 <nav class="tabs">
   <button data-tab="effectif"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-3px;margin-right:4px;"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 2.5-5 6-5s6 2 6 5"/><circle cx="17" cy="8" r="2.5"/><path d="M15 15.2c2.8.3 4.5 2 4.5 4.8"/></svg>Effectif</button>
   <button data-tab="calendrier"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-3px;margin-right:4px;"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Calendrier</button>
-  <button data-tab="import"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-3px;margin-right:4px;"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg>Import CSV</button>
+  <button data-tab="import"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-3px;margin-right:4px;"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg>Import Excel</button>
   <button class="active" data-tab="convocation"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-3px;margin-right:4px;"><path d="M8 3v3M16 3v3M4 8h16"/><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 13l2.5 2.5L16 10"/></svg>Convocation</button>
 </nav>
 
@@ -350,7 +351,6 @@
     <div class="two-col">
       <div class="team-col a">
         <h3 style="color:var(--red-dark);">Équipe A</h3>
-        <div class="field"><label>Libellé (ex. Journée 5)</label><input id="labelA" placeholder="Journée 5" maxlength="30"></div>
         <div class="field"><label>Date</label><input id="dateA" type="date"></div>
         <div class="field"><label>Adversaire (après "VS")</label><input id="advA" placeholder="Bessines (match en retard)"></div>
         <div class="field"><label>Heure du RDV</label><input id="heureA" placeholder="14h15"></div>
@@ -360,7 +360,6 @@
       </div>
       <div class="team-col b">
         <h3 style="color:var(--royalblue);">Équipe B</h3>
-        <div class="field"><label>Libellé (ex. Journée 5)</label><input id="labelB" placeholder="Journée 5" maxlength="30"></div>
         <div class="field"><label>Date</label><input id="dateB" type="date"></div>
         <div class="field"><label>Adversaire (après "VS")</label><input id="advB" placeholder="Tournoi Moulins Yzeure"></div>
         <div class="field"><label>Heure du RDV</label><input id="heureB" placeholder="7h00"></div>
@@ -375,8 +374,8 @@
   </section>
 
   <section class="panel" id="panel-import">
-    <h2>Importer un calendrier (CSV)</h2>
-    <p class="hint" style="margin-top:-6px;">Un fichier = les rencontres d'une seule équipe. Colonnes attendues : Libellé, Date, Adversaire, Heure du RDV, Lieu du RDV, Adresse du stade. 99 lignes maximum. Les rencontres importées se regroupent automatiquement par date avec celles déjà saisies (comme dans Calendrier).</p>
+    <h2>Importer un calendrier (Excel)</h2>
+    <p class="hint" style="margin-top:-6px;">Dépose ton fichier Excel de suivi (comme ton tableau habituel). Seules les colonnes Date, Adversaires et Adresse sont extraites, et uniquement les rencontres des 21 prochains jours (à partir d'aujourd'hui). Heure et lieu resteront à compléter ensuite. 99 lignes maximum. Les rencontres importées se regroupent automatiquement par date avec celles déjà saisies (comme dans Calendrier).</p>
 
     <div class="two-col" style="margin-bottom:14px;">
       <label class="team-col a" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
@@ -388,9 +387,9 @@
     </div>
 
     <div id="csvDropzone" style="border:2px dashed var(--line); border-radius:10px; padding:24px; text-align:center; cursor:pointer;">
-      <div style="font-size:14px; font-weight:700; color:var(--pitch-dark);">Glisser un fichier .csv ici</div>
+      <div style="font-size:14px; font-weight:700; color:var(--pitch-dark);">Glisser un fichier .xlsx ici</div>
       <div style="font-size:12px; color:#8b978f; margin-top:2px;">ou clique pour parcourir tes fichiers</div>
-      <input type="file" id="csvFileInput" accept=".csv,text/csv" style="display:none;">
+      <input type="file" id="csvFileInput" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none;">
     </div>
 
     <div id="csvPreviewBox"></div>
@@ -729,7 +728,7 @@ function matchLineHtml(m, team){
   }
   return `<div style="display:flex; align-items:center; gap:6px;">
     <div class="meta match-line" data-id="${m.id}" data-team="${team}" style="cursor:pointer; flex:1;">
-      <b style="color:${color};">${team}</b> — ${escapeHtml(d.label||'—')} ${d.date ? '· '+formatDate(d.date) : ''} · VS ${escapeHtml(d.adversaire||'—')} · ${escapeHtml(d.heure||'—')} ${statusBadge(d.date)}
+      <b style="color:${color};">${team}</b> — ${d.date ? formatDate(d.date) : '—'} · VS ${escapeHtml(d.adversaire||'—')} · ${escapeHtml(d.heure||'—')} ${statusBadge(d.date)}
     </div>
     <button class="dup-btn" data-id="${m.id}" data-team="${team}" title="Dupliquer vers le formulaire" style="background:none; border:none; color:#8b978f; cursor:pointer; font-size:13px; padding:2px 4px;">⧉</button>
   </div>`;
@@ -740,10 +739,7 @@ function matchEditFormHtml(m, team){
   const p = key => escapeHtml(d[key]||'');
   return `
     <div class="match-edit-form" data-id="${m.id}" data-team="${team}" style="border:1px solid var(--line); border-radius:8px; padding:10px; margin:6px 0;">
-      <div class="row2">
-        <div class="field"><label>Libellé</label><input class="me-label" value="${p('label')}"></div>
-        <div class="field"><label>Date</label><input class="me-date" type="date" value="${p('date')}"></div>
-      </div>
+      <div class="field"><label>Date</label><input class="me-date" type="date" value="${p('date')}"></div>
       <div class="field"><label>Adversaire</label><input class="me-adversaire" value="${p('adversaire')}"></div>
       <div class="row2">
         <div class="field"><label>Heure du RDV</label><input class="me-heure" value="${p('heure')}"></div>
@@ -820,7 +816,6 @@ function renderMatches(){
       const team = btn.dataset.team;
       const d = m && m[team];
       if(!d) return;
-      document.getElementById('label'+team).value = d.label||'';
       document.getElementById('adv'+team).value = d.adversaire||'';
       document.getElementById('heure'+team).value = d.heure||'';
       document.getElementById('lieu'+team).value = d.lieu||'';
@@ -837,7 +832,6 @@ function renderMatches(){
       const m = matches.find(x=>x.id===matchId);
       if(m && m[team]){
         m[team] = {
-          label: form.querySelector('.me-label').value.trim(),
           date: form.querySelector('.me-date').value,
           adversaire: form.querySelector('.me-adversaire').value.trim(),
           heure: form.querySelector('.me-heure').value.trim(),
@@ -886,7 +880,6 @@ function mergeTeamData(team, data){
 function addTeamEntry(team){
   const suffix = team; // 'A' or 'B'
   const data = {
-    label: document.getElementById('label'+suffix).value.trim(),
     date: document.getElementById('date'+suffix).value,
     adversaire: document.getElementById('adv'+suffix).value.trim(),
     heure: document.getElementById('heure'+suffix).value.trim(),
@@ -897,7 +890,7 @@ function addTeamEntry(team){
   if(!data.date){ toast('Indique une date pour regrouper correctement la rencontre'); return; }
 
   mergeTeamData(team, data);
-  ['label','date','adv','heure','lieu','adresse'].forEach(prefix=>{
+  ['date','adv','heure','lieu','adresse'].forEach(prefix=>{
     document.getElementById(prefix+suffix).value='';
   });
   saveMatches();
@@ -907,81 +900,66 @@ function addTeamEntry(team){
 document.getElementById('addMatchBtnA').addEventListener('click', ()=> addTeamEntry('A'));
 document.getElementById('addMatchBtnB').addEventListener('click', ()=> addTeamEntry('B'));
 
-// ---------- CSV import ----------
+// ---------- Excel import ----------
 let csvPreviewRows = [];
 
-function normalizeDateStr(s){
+const FR_MONTHS = {"janvier":0,"fevrier":1,"mars":2,"avril":3,"mai":4,"juin":5,"juillet":6,"aout":7,"septembre":8,"octobre":9,"novembre":10,"decembre":11};
+
+function parseFrenchDateStr(s){
   s = (s||'').trim();
+  if(!s) return '';
   if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  const m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
-  if(m){
-    const dd = m[1].padStart(2,'0');
-    const mm = m[2].padStart(2,'0');
-    return `${m[3]}-${mm}-${dd}`;
+  const dmy = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  if(dmy) return `${dmy[3]}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`;
+  const norm = s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const m = norm.match(/(\d{1,2})\s+([a-z]+)\s+(\d{4})/);
+  if(m && FR_MONTHS.hasOwnProperty(m[2])){
+    const mm = String(FR_MONTHS[m[2]]+1).padStart(2,'0');
+    return `${m[3]}-${mm}-${m[1].padStart(2,'0')}`;
   }
-  return s;
+  return '';
 }
 
-function parseCsvLine(line, delim){
-  const cells = [];
-  let cur = '';
-  let inQuotes = false;
-  for(let i=0; i<line.length; i++){
-    const ch = line[i];
-    if(inQuotes){
-      if(ch === '"'){
-        if(line[i+1] === '"'){ cur += '"'; i++; }
-        else inQuotes = false;
-      } else cur += ch;
-    } else {
-      if(ch === '"') inQuotes = true;
-      else if(ch === delim){ cells.push(cur); cur = ''; }
-      else cur += ch;
+function findHeaderRow(rows){
+  const stripAccents = s => (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  for(let i=0; i<Math.min(rows.length,10); i++){
+    const norm = rows[i].map(stripAccents);
+    if(norm.some(h=>h.includes('date')) && norm.some(h=>h.includes('adversaire'))){
+      return i;
     }
   }
-  cells.push(cur);
-  return cells.map(c=>c.trim());
+  return -1;
 }
 
-function parseCsvText(text){
-  const lines = text.split(/\r?\n/).filter(l=>l.trim().length);
-  if(lines.length === 0) return [];
+function parseExcelWorkbook(workbook){
+  const stripAccents = s => (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  for(const sheetName of workbook.SheetNames){
+    const sheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet, {header:1, raw:false, defval:''});
+    const headerIdx = findHeaderRow(rows);
+    if(headerIdx === -1) continue;
 
-  const firstLine = lines[0];
-  const semiCount = (firstLine.match(/;/g)||[]).length;
-  const commaCount = (firstLine.match(/,/g)||[]).length;
-  const delim = semiCount > commaCount ? ';' : ',';
-
-  const rows = lines.map(l=>parseCsvLine(l, delim));
-  const stripAccents = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  const headerNorm = rows[0].map(stripAccents);
-  const looksLikeHeader = headerNorm.some(h=>h.includes('date')) || headerNorm.some(h=>h.includes('adversaire'));
-
-  let colMap, dataRows;
-  if(looksLikeHeader){
+    const headerNorm = rows[headerIdx].map(stripAccents);
     const find = kw => headerNorm.findIndex(h=>h.includes(kw));
-    colMap = {
-      label: find('libell'),
-      date: find('date'),
-      adversaire: find('adversaire'),
-      heure: find('heure'),
-      lieu: find('lieu'),
-      adresse: find('adresse')
-    };
-    dataRows = rows.slice(1);
-  } else {
-    colMap = {label:0, date:1, adversaire:2, heure:3, lieu:4, adresse:5};
-    dataRows = rows;
-  }
+    const col = { date: find('date'), adversaire: find('adversaire'), adresse: find('adresse') };
+    if(col.date === -1 || col.adversaire === -1) continue;
 
-  return dataRows.slice(0, 99).map(r=>({
-    label: colMap.label>=0 ? (r[colMap.label]||'') : '',
-    date: normalizeDateStr(colMap.date>=0 ? (r[colMap.date]||'') : ''),
-    adversaire: colMap.adversaire>=0 ? (r[colMap.adversaire]||'') : '',
-    heure: colMap.heure>=0 ? (r[colMap.heure]||'') : '',
-    lieu: colMap.lieu>=0 ? (r[colMap.lieu]||'') : '',
-    adresse: colMap.adresse>=0 ? (r[colMap.adresse]||'') : ''
-  })).filter(row => row.adversaire);
+    const todayStr = new Date().toISOString().slice(0,10);
+    const endDate = new Date(); endDate.setDate(endDate.getDate()+21);
+    const endStr = endDate.toISOString().slice(0,10);
+
+    return rows.slice(headerIdx+1)
+      .map(r=>({
+        date: parseFrenchDateStr(r[col.date]),
+        adversaire: (r[col.adversaire]||'').toString().trim(),
+        heure: '',
+        lieu: '',
+        adresse: col.adresse>=0 ? (r[col.adresse]||'').toString().trim() : ''
+      }))
+      .filter(row => row.adversaire && row.date && row.date >= todayStr && row.date <= endStr)
+      .slice(0, 99);
+  }
+  return [];
 }
 
 function renderCsvPreview(){
@@ -990,7 +968,7 @@ function renderCsvPreview(){
   const shown = csvPreviewRows.slice(0, 5);
   const rest = csvPreviewRows.length - shown.length;
   box.innerHTML = `
-    <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:#6b756e; margin:16px 0 6px;">Aperçu avant import</div>
+    <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:#6b756e; margin:16px 0 6px;">Aperçu avant import — rencontres des 21 prochains jours</div>
     <div style="border:1px solid var(--line); border-radius:8px; overflow:hidden;">
       <div style="display:flex; justify-content:space-between; padding:8px 12px; background:var(--bg); font-size:12px; font-weight:700; color:var(--pitch-dark);">
         <span>${csvPreviewRows.length} rencontre(s) détectée(s)</span>
@@ -998,12 +976,12 @@ function renderCsvPreview(){
       </div>
       ${shown.map(r=>`
         <div style="padding:10px 12px; font-size:12.5px; border-top:1px solid var(--line);">
-          ${escapeHtml(r.label||'—')} ${r.date ? '· '+formatDate(r.date) : ''} · VS ${escapeHtml(r.adversaire)}
+          ${r.date ? formatDate(r.date) : '—'} · VS ${escapeHtml(r.adversaire)}${r.adresse ? ' · '+escapeHtml(r.adresse) : ''}
         </div>
       `).join('')}
       ${rest > 0 ? `<div style="padding:8px 12px; font-size:11.5px; color:#8b978f; border-top:1px solid var(--line);">+ ${rest} autre(s) ligne(s)...</div>` : ''}
     </div>
-    <div class="hint">Une ligne pourra être corrigée après import, directement dans l'onglet Calendrier.</div>
+    <div class="hint">Heure et lieu du RDV restent à compléter — directement dans l'onglet Calendrier ou Convocation.</div>
     <button class="btn btn-amber" id="csvImportBtn" style="margin-top:8px;">Importer dans le calendrier</button>
   `;
   document.getElementById('csvImportBtn').addEventListener('click', ()=>{
@@ -1025,12 +1003,18 @@ function handleCsvFile(file){
   if(!file) return;
   const reader = new FileReader();
   reader.onload = e=>{
-    csvPreviewRows = parseCsvText(e.target.result);
-    if(csvPreviewRows.length === 0){ toast('Aucune rencontre reconnue dans ce fichier'); }
-    renderCsvPreview();
+    try{
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, {type:'array'});
+      csvPreviewRows = parseExcelWorkbook(workbook);
+      if(csvPreviewRows.length === 0){ toast('Aucune rencontre des 21 prochains jours reconnue dans ce fichier'); }
+      renderCsvPreview();
+    }catch(err){
+      toast('Fichier Excel illisible');
+    }
   };
   reader.onerror = ()=> toast('Impossible de lire ce fichier');
-  reader.readAsText(file, 'UTF-8');
+  reader.readAsArrayBuffer(file);
 }
 
 const csvDropzone = document.getElementById('csvDropzone');
@@ -1057,7 +1041,7 @@ function renderMatchSelect(){
     return;
   }
   sel.innerHTML = sorted.map(m => {
-    const label = `${(m.A&&m.A.label)||'A'} / ${(m.B&&m.B.label)||'B'}`;
+    const label = `VS ${(m.A&&m.A.adversaire)||'—'} / VS ${(m.B&&m.B.adversaire)||'—'}`;
     const date = (m.A&&m.A.date) || (m.B&&m.B.date);
     return `<option value="${m.id}">${escapeHtml(label)}${date ? ' — ' + formatDate(date) : ''}</option>`;
   }).join('');
