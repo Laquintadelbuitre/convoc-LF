@@ -956,10 +956,18 @@ function parseExcelWorkbook(workbook){
     const headerIdx = findHeaderRow(rows);
     if(headerIdx === -1) continue;
 
-    const headerNorm = rows[headerIdx].map(stripAccents);
+    const headerRow = rows[headerIdx];
+    const headerNorm = headerRow.map(stripAccents);
     const find = kw => headerNorm.findIndex(h=>h.includes(kw));
-    const col = { date: find('date'), adversaire: find('adversaire'), adresse: find('adresse') };
-    if(col.date === -1 || col.adversaire === -1) continue;
+
+    const dateCol = find('date');
+    if(dateCol === -1) continue;
+    // "Adversaires" sits right after "Date" in this workbook's layout — fall back to that
+    // position if the header text itself isn't matched for any reason (merged cells, etc.)
+    let adversaireCol = find('adversaire');
+    if(adversaireCol === -1) adversaireCol = dateCol + 1;
+    let adresseCol = find('adresse');
+    if(adresseCol === -1) adresseCol = headerRow.length - 1;
 
     const todayStr = new Date().toISOString().slice(0,10);
     const endDate = new Date(); endDate.setDate(endDate.getDate()+21);
@@ -967,11 +975,11 @@ function parseExcelWorkbook(workbook){
 
     return rows.slice(headerIdx+1)
       .map(r=>({
-        date: cellToDateStr(r[col.date]),
-        adversaire: (r[col.adversaire]||'').toString().trim(),
+        date: cellToDateStr(r[dateCol]),
+        adversaire: (r[adversaireCol]||'').toString().trim(),
         heure: '',
         lieu: '',
-        adresse: col.adresse>=0 ? (r[col.adresse]||'').toString().trim() : ''
+        adresse: (r[adresseCol]||'').toString().trim()
       }))
       .filter(row => row.adversaire && row.date && row.date >= todayStr && row.date <= endStr)
       .slice(0, 99);
