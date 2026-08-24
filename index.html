@@ -105,7 +105,7 @@
     box-shadow:0 -2px 0 var(--amber) inset;
   }
   main{
-    max-width:760px;
+    max-width:1100px;
     margin:0 auto;
     padding:0 16px 60px;
   }
@@ -1355,12 +1355,34 @@ function renderConvocationBody(){
         </div>
         <div class="chips" id="chipBoxB"></div>
       </div>
-      <div style="flex:1; min-width:150px;">
+      <div style="flex:2; min-width:320px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
           <span style="font-size:12px; font-weight:700; text-transform:uppercase; color:#8b978f;">Reste à placer</span>
           <span id="countRest" style="font-size:11px; font-weight:700; background:var(--bg); color:#6b756e; padding:2px 8px; border-radius:10px;">0</span>
         </div>
-        <div class="chips" id="chipBoxRest"></div>
+        <div style="display:flex; gap:14px; flex-wrap:wrap;">
+          <div style="flex:1; min-width:150px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+              <span style="font-size:11px; font-weight:700; text-transform:uppercase; color:#8b978f;">U13</span>
+              <span id="countRestU13" style="font-size:10.5px; font-weight:700; background:var(--bg); color:#6b756e; padding:1px 7px; border-radius:10px;">0</span>
+            </div>
+            <div class="chips" id="chipBoxRestU13" data-team="rest"></div>
+          </div>
+          <div style="flex:1; min-width:150px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+              <span style="font-size:11px; font-weight:700; text-transform:uppercase; color:#8b978f;">U12</span>
+              <span id="countRestU12" style="font-size:10.5px; font-weight:700; background:var(--bg); color:#6b756e; padding:1px 7px; border-radius:10px;">0</span>
+            </div>
+            <div class="chips" id="chipBoxRestU12" data-team="rest"></div>
+          </div>
+          <div style="flex:1; min-width:150px;" id="restAutresCol">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+              <span style="font-size:11px; font-weight:700; text-transform:uppercase; color:#8b978f;">Autres</span>
+              <span id="countRestAutres" style="font-size:10.5px; font-weight:700; background:var(--bg); color:#6b756e; padding:1px 7px; border-radius:10px;">0</span>
+            </div>
+            <div class="chips" id="chipBoxRestAutres" data-team="rest"></div>
+          </div>
+        </div>
       </div>
     </div>
   `;
@@ -1396,16 +1418,24 @@ function renderChips(){
   const teamA = all.filter(c => getAssign(c.id).team === 'A').sort((a,b)=> getAssign(a.id).order - getAssign(b.id).order);
   const teamB = all.filter(c => getAssign(c.id).team === 'B').sort((a,b)=> getAssign(a.id).order - getAssign(b.id).order);
   const rest = all.filter(c => !['A','B'].includes(getAssign(c.id).team));
+  const restU13 = rest.filter(c => c.category === 'U13');
+  const restU12 = rest.filter(c => c.category === 'U12');
+  const restAutres = rest.filter(c => c.category !== 'U13' && c.category !== 'U12');
 
   document.getElementById('chipBoxA').innerHTML = teamA.map(chipHtml).join('') || '<span class="empty" style="padding:6px 0;">—</span>';
   document.getElementById('chipBoxB').innerHTML = teamB.map(chipHtml).join('') || '<span class="empty" style="padding:6px 0;">—</span>';
-  document.getElementById('chipBoxRest').innerHTML = rest.map(chipHtml).join('') || '<span class="empty" style="padding:6px 0;">—</span>';
+  document.getElementById('chipBoxRestU13').innerHTML = restU13.map(chipHtml).join('') || '<span class="empty" style="padding:6px 0;">—</span>';
+  document.getElementById('chipBoxRestU12').innerHTML = restU12.map(chipHtml).join('') || '<span class="empty" style="padding:6px 0;">—</span>';
+  document.getElementById('chipBoxRestAutres').innerHTML = restAutres.map(chipHtml).join('') || '<span class="empty" style="padding:6px 0;">—</span>';
+  document.getElementById('restAutresCol').style.display = restAutres.length ? '' : 'none';
   document.getElementById('chipBoxA').dataset.team = 'A';
   document.getElementById('chipBoxB').dataset.team = 'B';
-  document.getElementById('chipBoxRest').dataset.team = 'rest';
   document.getElementById('countA').textContent = teamA.length;
   document.getElementById('countB').textContent = teamB.length;
   document.getElementById('countRest').textContent = rest.length;
+  document.getElementById('countRestU13').textContent = restU13.length;
+  document.getElementById('countRestU12').textContent = restU12.length;
+  document.getElementById('countRestAutres').textContent = restAutres.length;
 
   document.querySelectorAll('#convocationBody .chip').forEach(chip=>{
     let startX=0, startY=0, dragging=false, ghost=null, dropTarget=null;
