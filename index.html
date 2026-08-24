@@ -437,6 +437,10 @@
 
     <div class="subpanel active" id="subpanel-generer">
       <h2>Sélection de la rencontre</h2>
+      <div id="editBanner" style="display:none; background:var(--amber); color:#1a1a1a; padding:10px 14px; border-radius:8px; font-size:13px; font-weight:700; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+        <span id="editBannerText"></span>
+        <button id="editBannerCancel" style="background:none; border:none; color:#1a1a1a; font-weight:700; text-decoration:underline; cursor:pointer; font-size:13px;">Annuler</button>
+      </div>
       <div class="field">
         <select id="matchSelect"></select>
       </div>
@@ -486,6 +490,7 @@ const store = {
 let children = [];
 let matches = [];
 let currentMatchId = null;
+let editingSavedId = null; // {id, matchId, team} de la convocation sauvegardée en cours d'édition
 let assignments = {}; // { childId: {team:'A'|'B'|'blesse', mute:bool} }
 let savedConvocations = [];
 
@@ -641,10 +646,15 @@ function renderSavedList(){
       <div class="actions">
         <a class="btn btn-primary" href="${item.dataUrl}" download="${item.filename}">Télécharger</a>
         <button class="btn btn-amber share-saved" data-id="${item.id}">Partager</button>
+        <button class="btn btn-primary edit-saved" data-id="${item.id}" style="background:var(--pitch);">Éditer</button>
         <button class="del" data-id="${item.id}" title="Supprimer">×</button>
       </div>
     </div>
   `).join('');
+
+  box.querySelectorAll('.edit-saved').forEach(b=>{
+    b.addEventListener('click', ()=> editSavedConvocation(b.dataset.id));
+  });
 
   box.querySelectorAll('.del').forEach(b=>{
     b.addEventListener('click', ()=>{
@@ -680,6 +690,47 @@ function renderSavedList(){
   });
 }
 
+function updateEditBanner(){
+  const banner = document.getElementById('editBanner');
+  const text = document.getElementById('editBannerText');
+  if(!banner) return;
+  if(editingSavedId){
+    const item = savedConvocations.find(x=>x.id === editingSavedId.id);
+    text.textContent = item
+      ? `Édition — Équipe ${item.team} · VS ${item.adversaire||'—'} : régénère puis clique "Sauvegarder pour plus tard" pour mettre à jour.`
+      : 'Édition en cours : régénère puis sauvegarde pour mettre à jour.';
+    banner.style.display = 'flex';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+function editSavedConvocation(id){
+  const item = savedConvocations.find(x=>x.id === id);
+  if(!item) return;
+  const m = matches.find(x=>x.id === item.matchId);
+  if(!m){
+    toast('La rencontre correspondante a été supprimée du calendrier');
+    return;
+  }
+  if(!m[item.team]){
+    toast(`L'équipe ${item.team} de cette rencontre a été retirée`);
+    return;
+  }
+  editingSavedId = {id: item.id, matchId: item.matchId, team: item.team};
+  currentMatchId = item.matchId;
+
+  document.querySelectorAll('.subtab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.subpanel').forEach(p=>p.classList.remove('active'));
+  document.querySelector('.subtab-btn[data-subtab="generer"]').classList.add('active');
+  document.getElementById('subpanel-generer').classList.add('active');
+
+  document.getElementById('matchSelect').value = currentMatchId;
+  updateEditBanner();
+  onMatchChange();
+  toast('Mode édition activé — régénère l\'image pour la mettre à jour');
+}
+
 // ---------- tabs ----------
 document.querySelectorAll('nav.tabs button').forEach(btn=>{
   btn.addEventListener('click', ()=>{
@@ -699,6 +750,12 @@ document.querySelectorAll('.subtab-btn').forEach(btn=>{
     document.getElementById('subpanel-' + btn.dataset.subtab).classList.add('active');
     if(btn.dataset.subtab === 'sauvegarder') renderSavedList();
   });
+});
+
+document.getElementById('editBannerCancel').addEventListener('click', ()=>{
+  editingSavedId = null;
+  updateEditBanner();
+  toast('Édition annulée');
 });
 
 document.getElementById('clubTitle').addEventListener('change', saveTitle);
@@ -1214,6 +1271,10 @@ function renderMatchSelect(){
 
 document.getElementById('matchSelect').addEventListener('change', e=>{
   currentMatchId = e.target.value;
+  if(editingSavedId && editingSavedId.matchId !== currentMatchId){
+    editingSavedId = null;
+    updateEditBanner();
+  }
   onMatchChange();
 });
 
@@ -1724,24 +1785,48 @@ async function renderConvocationImage(m, teamKey, players, wrap){
   block.appendChild(document.createElement('br'));
   block.appendChild(link);
 
+  const isEditingThis = editingSavedId && editingSavedId.matchId === m.id && editingSavedId.team === teamKey;
+
   const saveBtn = document.createElement('button');
   saveBtn.className = 'btn btn-amber save-link';
   saveBtn.style.marginLeft = '8px';
-  saveBtn.textContent = 'Sauvegarder pour plus tard';
+  saveBtn.textContent = isEditingThis ? 'Mettre à jour la sauvegarde' : 'Sauvegarder pour plus tard';
   saveBtn.addEventListener('click', ()=>{
-    savedConvocations.push({
-      id: uid(),
-      matchId: m.id,
-      team: teamKey,
-      date: info.date || '',
-      adversaire: info.adversaire || '',
-      filename,
-      dataUrl: canvas.toDataURL('image/png'),
-      savedAt: Date.now()
-    });
-    saveSavedConvocationsToStore();
-    updateSavedBadge();
-    toast('Convocation sauvegardée — onglet "Sauvegardées"');
+    if(isEditingThis){
+      const existing = savedConvocations.find(x=>x.id === editingSavedId.id);
+      if(existing){
+        existing.date = info.date || '';
+        existing.adversaire = info.adversaire || '';
+        existing.filename = filename;
+        existing.dataUrl = canvas.toDataURL('image/png');
+        existing.savedAt = Date.now();
+      } else {
+        savedConvocations.push({
+          id: uid(), matchId: m.id, team: teamKey,
+          date: info.date || '', adversaire: info.adversaire || '',
+          filename, dataUrl: canvas.toDataURL('image/png'), savedAt: Date.now()
+        });
+      }
+      editingSavedId = null;
+      updateEditBanner();
+      saveSavedConvocationsToStore();
+      updateSavedBadge();
+      toast('Convocation sauvegardée mise à jour');
+    } else {
+      savedConvocations.push({
+        id: uid(),
+        matchId: m.id,
+        team: teamKey,
+        date: info.date || '',
+        adversaire: info.adversaire || '',
+        filename,
+        dataUrl: canvas.toDataURL('image/png'),
+        savedAt: Date.now()
+      });
+      saveSavedConvocationsToStore();
+      updateSavedBadge();
+      toast('Convocation sauvegardée — onglet "Sauvegardées"');
+    }
   });
   block.appendChild(saveBtn);
 
