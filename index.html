@@ -528,9 +528,12 @@ async function syncConvocationVersMatchday(m, teamKey, players){
   const adversaires = decouperAdversaires(info.adversaire);
   if(adversaires.length === 0) return true;
 
-  try{
-    const resultats = await Promise.all(adversaires.map(adversaire =>
-      fetch(MATCHDAY_API_URL, {
+  let toutOk = true;
+  // Envoi séquentiel (un adversaire après l'autre) pour éviter tout conflit
+  // d'écriture côté Google Sheets si plusieurs matchs sont créés en même temps.
+  for(const adversaire of adversaires){
+    try{
+      const res = await fetch(MATCHDAY_API_URL, {
         method: 'POST',
         headers: {'Content-Type':'text/plain;charset=utf-8'},
         body: JSON.stringify({
@@ -543,12 +546,14 @@ async function syncConvocationVersMatchday(m, teamKey, players){
           lieu: info.lieu || '',
           joueurs: players.map(p => p.name)
         })
-      }).then(res => res.json())
-    ));
-    return resultats.every(d => d && d.ok);
-  }catch(e){
-    return false;
+      });
+      const data = await res.json();
+      if(!data || !data.ok) toutOk = false;
+    }catch(e){
+      toutOk = false;
+    }
   }
+  return toutOk;
 }
 
 function toast(msg){
