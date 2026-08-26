@@ -1284,7 +1284,11 @@ function handleCsvFile(file){
   reader.onload = e=>{
     try{
       const data = new Uint8Array(e.target.result);
-      const workbook = XLSX.read(data, {type:'array', cellDates:true});
+      // cellDates volontairement retiré : cette option convertit les dates en objets
+      // Date JS d'une façon sensible au fuseau horaire de l'ordinateur, ce qui provoque
+      // un décalage d'un jour selon les réglages. On garde les dates en numéro de série
+      // brut et on les convertit nous-mêmes (calcul pur, sans fuseau) dans cellToDateStr.
+      const workbook = XLSX.read(data, {type:'array'});
       csvPreviewRows = parseExcelWorkbook(workbook);
       if(csvPreviewRows.length === 0){ toast('Aucune rencontre des 21 prochains jours reconnue dans ce fichier'); }
       renderCsvPreview();
