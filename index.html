@@ -494,6 +494,50 @@ let editingSavedId = null; // {id, matchId, team} de la convocation sauvegardée
 let assignments = {}; // { childId: {team:'A'|'B'|'blesse', mute:bool} }
 let savedConvocations = [];
 
+// ---------- synchronisation avec Matchday (suivi de match en direct) ----------
+// Envoie la convocation générée ici vers le Google Sheet de l'outil Matchday,
+// pour que les joueurs convoqués soient automatiquement disponibles côté
+// coach/parents sans ressaisie. Équipe A = U13-1, Équipe B = U13-2.
+const MATCHDAY_API_URL = 'https://script.google.com/macros/s/AKfycby6pUMd49pdfWTzTAwVIg_RxcOzKml9lUIVl3UDOxSeCaT-DwiJdvcbMidFIlMuHULf/exec';
+const MATCHDAY_PWD = '0501';
+const MATCHDAY_EQUIPE_PAR_TEAM = { A: 'U13-1', B: 'U13-2' };
+
+/** Convertit une heure au format libre ("14h15", "14h", "14:15") en "HH:mm". Renvoie '' si non reconnu. */
+function convertirHeurePourMatchday(heureTexte){
+  if(!heureTexte) return '';
+  const m = String(heureTexte).match(/(\d{1,2})\s*[h:]\s*(\d{2})?/i);
+  if(!m) return '';
+  const h = m[1].padStart(2,'0');
+  const mm = (m[2]||'00').padStart(2,'0');
+  return `${h}:${mm}`;
+}
+
+/** Envoie la convocation d'une équipe (A ou B) vers Matchday. N'interrompt jamais la génération des images en cas d'échec. */
+async function syncConvocationVersMatchday(m, teamKey, players){
+  const info = m[teamKey];
+  if(!info) return true;
+  try{
+    const res = await fetch(MATCHDAY_API_URL, {
+      method: 'POST',
+      headers: {'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({
+        action: 'syncConvocations',
+        pwd: MATCHDAY_PWD,
+        equipe: MATCHDAY_EQUIPE_PAR_TEAM[teamKey],
+        adversaire: info.adversaire || '',
+        date: info.date || '',
+        heureDebut: convertirHeurePourMatchday(info.heure),
+        lieu: info.lieu || '',
+        joueurs: players.map(p => p.name)
+      })
+    });
+    const data = await res.json();
+    return !!data.ok;
+  }catch(e){
+    return false;
+  }
+}
+
 function toast(msg){
   const t = document.getElementById('toast');
   t.innerHTML = escapeHtml(msg);
@@ -1578,6 +1622,16 @@ document.getElementById('generateBtn').addEventListener('click', async ()=>{
     .sort((a,b)=> (getAssign(a.id).order||0) - (getAssign(b.id).order||0));
   const teamBPlayers = children.filter(c => getAssign(c.id).team === 'B')
     .sort((a,b)=> (getAssign(a.id).order||0) - (getAssign(b.id).order||0));
+
+  const syncs = [];
+  if(m.A) syncs.push(syncConvocationVersMatchday(m, 'A', teamAPlayers));
+  if(m.B) syncs.push(syncConvocationVersMatchday(m, 'B', teamBPlayers));
+  if(syncs.length){
+    Promise.all(syncs).then(resultats=>{
+      if(resultats.every(Boolean)) toast('Convocations synchronisées avec Matchday');
+      else toast('Images générées — synchronisation Matchday partiellement échouée');
+    });
+  }
 
   if(m.A){
     await renderConvocationImage(m, 'A', teamAPlayers, wrap);
