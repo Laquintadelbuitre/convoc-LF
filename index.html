@@ -513,26 +513,39 @@ function convertirHeurePourMatchday(heureTexte){
 }
 
 /** Envoie la convocation d'une équipe (A ou B) vers Matchday. N'interrompt jamais la génération des images en cas d'échec. */
+/** Découpe "Isle - Feytiat, Lafarge" en ["Isle", "Feytiat", "Lafarge"] : un plateau à plusieurs adversaires. */
+function decouperAdversaires(texte){
+  return String(texte || '')
+    .split(/[-,]/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
 async function syncConvocationVersMatchday(m, teamKey, players){
   const info = m[teamKey];
   if(!info) return true;
+
+  const adversaires = decouperAdversaires(info.adversaire);
+  if(adversaires.length === 0) return true;
+
   try{
-    const res = await fetch(MATCHDAY_API_URL, {
-      method: 'POST',
-      headers: {'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({
-        action: 'syncConvocations',
-        pwd: MATCHDAY_PWD,
-        equipe: MATCHDAY_EQUIPE_PAR_TEAM[teamKey],
-        adversaire: info.adversaire || '',
-        date: info.date || '',
-        heureDebut: convertirHeurePourMatchday(info.heure),
-        lieu: info.lieu || '',
-        joueurs: players.map(p => p.name)
-      })
-    });
-    const data = await res.json();
-    return !!data.ok;
+    const resultats = await Promise.all(adversaires.map(adversaire =>
+      fetch(MATCHDAY_API_URL, {
+        method: 'POST',
+        headers: {'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify({
+          action: 'syncConvocations',
+          pwd: MATCHDAY_PWD,
+          equipe: MATCHDAY_EQUIPE_PAR_TEAM[teamKey],
+          adversaire,
+          date: info.date || '',
+          heureDebut: convertirHeurePourMatchday(info.heure),
+          lieu: info.lieu || '',
+          joueurs: players.map(p => p.name)
+        })
+      }).then(res => res.json())
+    ));
+    return resultats.every(d => d && d.ok);
   }catch(e){
     return false;
   }
