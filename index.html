@@ -1817,7 +1817,7 @@ async function renderConvocationImage(m, teamKey, players, wrap){
 
   // wrap each paragraph into sublines first, to compute total block height
   const dateLines = info.date ? wrapLines(ctx, formatDate(info.date), maxTextW, dateFont) : [];
-  const rdvLine = `RDV ${info.heure || '—'} au ${info.lieu || '—'}`;
+  const rdvLine = `${info.heure || '—'} - ${info.lieu || '—'}`;
   const rdvLines = wrapLines(ctx, rdvLine, maxTextW, rdvFont);
   const adresseLines = info.adresse ? wrapLines(ctx, info.adresse, maxTextW, adresseFont) : [];
 
