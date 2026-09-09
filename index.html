@@ -20,6 +20,8 @@
     --amber:#e8a33d;
     --beige:#e8dfca;
     --royalblue:#1a3fa0;
+    --purple:#6b3fa0;
+    --purple-dark:#4f2d78;
     --darkgray:#4a4d52;
     --bg:#f4f6f2;
     --ink:#14231a;
@@ -150,10 +152,11 @@
   .field input:focus, .field select:focus{outline:2px solid var(--amber); border-color:transparent;}
   .row2{display:flex; gap:10px;}
   .row2 > div{flex:1;}
-  .two-col{display:flex; gap:18px; margin-bottom:16px;}
-  .two-col .team-col{flex:1; min-width:0; padding:14px; border-radius:10px; border:1px solid var(--line);}
+  .two-col{display:flex; gap:18px; margin-bottom:16px; flex-wrap:wrap;}
+  .two-col .team-col{flex:1; min-width:220px; padding:14px; border-radius:10px; border:1px solid var(--line);}
   .two-col .team-col.a{border-left:4px solid var(--green);}
   .two-col .team-col.b{border-left:4px solid var(--red);}
+  .two-col .team-col.c{border-left:4px solid var(--purple);}
   @media (max-width:600px){ .two-col{flex-direction:column;} }
   .btn{
     display:inline-block;
@@ -233,6 +236,7 @@
   }
   .chip.state-A{background:var(--red); color:#fff;}
   .chip.state-B{background:var(--royalblue); color:#fff;}
+  .chip.state-C{background:var(--purple); color:#fff;}
   .chip.state-blesse{background:var(--green); color:#fff;}
   .chip.state-absent{background:var(--darkgray); color:#fff;}
   .ctx-menu{
@@ -273,9 +277,11 @@
     display:flex;
     gap:10px;
     margin-bottom:16px;
+    flex-wrap:wrap;
   }
   .match-info .card{
     flex:1;
+    min-width:200px;
     border-radius:10px;
     padding:12px;
     color:#fff;
@@ -283,6 +289,7 @@
   }
   .match-info .card.a{background:var(--red-dark);}
   .match-info .card.b{background:var(--royalblue);}
+  .match-info .card.c{background:var(--purple-dark);}
   .match-info .card b{display:block; font-size:14px; margin-bottom:2px;}
   .hint{font-size:12px; color:#7a847d; margin:10px 0 16px;}
   .legend{display:flex; gap:14px; font-size:12px; color:#556; margin-bottom:14px; flex-wrap:wrap;}
@@ -401,6 +408,15 @@
         <div class="field"><label>Adresse du stade</label><input id="adresseB" placeholder="Centre Commercial Cora, 87280 Limoges"></div>
         <button class="btn btn-primary" id="addMatchBtnB" style="background:var(--royalblue);">Ajouter Équipe B</button>
       </div>
+      <div class="team-col c">
+        <h3 style="color:var(--purple-dark);">Équipe C</h3>
+        <div class="field"><label>Date</label><input id="dateC" type="date"></div>
+        <div class="field"><label>Adversaire (après "VS")</label><input id="advC" placeholder="Adversaire"></div>
+        <div class="field"><label>Heure du RDV</label><input id="heureC" placeholder="9h00"></div>
+        <div class="field"><label>Lieu du RDV</label><input id="lieuC" placeholder="Stade"></div>
+        <div class="field"><label>Adresse du stade</label><input id="adresseC" placeholder="Adresse du stade"></div>
+        <button class="btn btn-primary" id="addMatchBtnC" style="background:var(--purple-dark);">Ajouter Équipe C</button>
+      </div>
     </div>
 
     <h2 style="margin-top:28px;">Rencontres de la saison</h2>
@@ -417,6 +433,9 @@
       </label>
       <label class="team-col b" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
         <input type="radio" name="csvTeam" value="B" style="accent-color:var(--royalblue);"> <b style="color:var(--royalblue);">Équipe B</b>
+      </label>
+      <label class="team-col c" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <input type="radio" name="csvTeam" value="C" style="accent-color:var(--purple);"> <b style="color:var(--purple-dark);">Équipe C</b>
       </label>
     </div>
 
@@ -524,6 +543,7 @@ function decouperAdversaires(texte){
 async function syncConvocationVersMatchday(m, teamKey, players){
   const info = m[teamKey];
   if(!info) return true;
+  if(!MATCHDAY_EQUIPE_PAR_TEAM[teamKey]) return true; // pas de correspondance Matchday configurée pour cette équipe — on ignore la sync sans bloquer la génération d'image
 
   const adversaires = decouperAdversaires(info.adversaire);
   if(adversaires.length === 0) return true;
@@ -585,10 +605,10 @@ function undoToast(msg, undoFn){
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
 // ---------- persistence ----------
-const DEFAULT_ROSTER = ["Hadi","Sebastien","Selyan","Mickaël","Bakoutoubo","Sacha","Keys","Nourou","Yanis","Mathis","Ethan","Abdoul Karim","Jalil","Gabin","Adam","Kalifa","Bilel","Pablo","Melih","Issam","Emir","Loan","Sarah","Shayan","Chahine","Salman","Tasilimi","Theo","Rafael","Matteo","Elias","Nylan","Ethanmoise","Simon","Milan","Kennely","Jibril"];
+const DEFAULT_ROSTER = ["Hadi","Sebastien","Mickaël","Bakoutoubo","Sacha","Keys","Nourou","Yanis","Mathis","Ethan","Abdoul Karim","Jalil","Gabin","Adam","Kalifa","Bilel","Pablo","Melih","Issam","Emir","Loan","Sarah","Shayan","Chahine","Salman","Tasilimi","Theo","Rafael","Matteo","Elias","Nylan","Ethanmoise","Simon","Milan","Kennely","Jibril","Selyan"];
 const MUTED_NAMES = ["Adam","Mickaël","Yanis","Ethan","Mathis","Shayan","Rafael","Nylan","Selyan"];
 const U12_NAMES = ["Shayan","Chahine","Salman","Tasilimi","Theo","Rafael","Matteo","Elias","Nylan","Ethanmoise","Simon","Milan","Kennely","Jibril"];
-const U13_NAMES = ["Hadi","Sebastien","Selyan","Mickaël","Bakoutoubo","Sacha","Keys","Nourou","Yanis","Mathis","Ethan","Abdoul Karim","Jalil","Gabin","Adam","Kalifa","Bilel","Pablo","Melih","Issam","Emir","Loan","Sarah"];
+const U13_NAMES = ["Hadi","Sebastien","Mickaël","Bakoutoubo","Sacha","Keys","Nourou","Yanis","Mathis","Ethan","Abdoul Karim","Jalil","Gabin","Adam","Kalifa","Bilel","Pablo","Melih","Issam","Emir","Loan","Sarah"];
 
 // Returns the most recent Sunday 23:59 that has already passed (the last weekly reset boundary).
 function mostRecentSundayReset(now){
@@ -972,9 +992,13 @@ function flashSaved(nearEl){
   }, 1200);
 }
 
+function teamColor(team){
+  return team === 'A' ? 'var(--red-dark)' : (team === 'B' ? 'var(--royalblue)' : 'var(--purple-dark)');
+}
+
 function matchLineHtml(m, team){
   const d = m[team];
-  const color = team === 'A' ? 'var(--red-dark)' : 'var(--royalblue)';
+  const color = teamColor(team);
   if(!d){
     return `<div class="meta"><b style="color:${color};">${team}</b> — <em>à compléter</em></div>`;
   }
@@ -1009,18 +1033,22 @@ function monthLabel(dateStr){
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+function matchAnyDate(m){
+  return (m.A&&m.A.date) || (m.B&&m.B.date) || (m.C&&m.C.date) || '';
+}
+
 function renderMatches(){
   const box = document.getElementById('matchList');
   if(matches.length === 0){
     box.innerHTML = '<div class="empty">Aucune rencontre programmée.</div>';
     return;
   }
-  const sorted = [...matches].sort((a,b)=> ((a.A&&a.A.date)||(a.B&&a.B.date)||'').localeCompare((b.A&&b.A.date)||(b.B&&b.B.date)||''));
+  const sorted = [...matches].sort((a,b)=> matchAnyDate(a).localeCompare(matchAnyDate(b)));
 
   let html = '';
   let currentMonth = null;
   sorted.forEach(m=>{
-    const d = (m.A&&m.A.date) || (m.B&&m.B.date) || '';
+    const d = matchAnyDate(m);
     const monthKey = d ? d.slice(0,7) : 'sans-date';
     if(monthKey !== currentMonth){
       currentMonth = monthKey;
@@ -1029,8 +1057,7 @@ function renderMatches(){
     html += `
       <div class="list-item" style="align-items:flex-start;">
         <div style="flex:1;">
-          ${editingMatchTeam && editingMatchTeam.matchId===m.id && editingMatchTeam.team==='A' ? matchEditFormHtml(m,'A') : matchLineHtml(m,'A')}
-          ${editingMatchTeam && editingMatchTeam.matchId===m.id && editingMatchTeam.team==='B' ? matchEditFormHtml(m,'B') : matchLineHtml(m,'B')}
+          ${TEAMS.map(t => editingMatchTeam && editingMatchTeam.matchId===m.id && editingMatchTeam.team===t ? matchEditFormHtml(m,t) : matchLineHtml(m,t)).join('')}
         </div>
         <button class="del" data-id="${m.id}" title="Supprimer">×</button>
       </div>
@@ -1118,19 +1145,22 @@ function formatDate(iso){
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+const TEAMS = ['A','B','C'];
+
 function mergeTeamData(team, data){
-  const otherTeam = team === 'A' ? 'B' : 'A';
   // look for an existing match with the same date where this team's slot is still free
-  let target = matches.find(m => !m[team] && m[otherTeam] && m[otherTeam].date === data.date);
+  let target = matches.find(m => !m[team] && TEAMS.some(t => t !== team && m[t] && m[t].date === data.date));
   if(target){
     target[team] = data;
   } else {
-    matches.push({id: uid(), A: team==='A'?data:null, B: team==='B'?data:null});
+    const m = {id: uid(), A: null, B: null, C: null};
+    m[team] = data;
+    matches.push(m);
   }
 }
 
 function addTeamEntry(team){
-  const suffix = team; // 'A' or 'B'
+  const suffix = team; // 'A', 'B' ou 'C'
   const data = {
     date: document.getElementById('date'+suffix).value,
     adversaire: document.getElementById('adv'+suffix).value.trim(),
@@ -1151,6 +1181,7 @@ function addTeamEntry(team){
 
 document.getElementById('addMatchBtnA').addEventListener('click', ()=> addTeamEntry('A'));
 document.getElementById('addMatchBtnB').addEventListener('click', ()=> addTeamEntry('B'));
+document.getElementById('addMatchBtnC').addEventListener('click', ()=> addTeamEntry('C'));
 
 // ---------- Excel import ----------
 let csvPreviewRows = [];
@@ -1316,7 +1347,7 @@ csvDropzone.addEventListener('drop', e=>{
 // ---------- convocation ----------
 function renderMatchSelect(){
   const sel = document.getElementById('matchSelect');
-  const sorted = [...matches].sort((a,b)=> ((a.A&&a.A.date)||(a.B&&a.B.date)||'').localeCompare((b.A&&b.A.date)||(b.B&&b.B.date)||''));
+  const sorted = [...matches].sort((a,b)=> matchAnyDate(a).localeCompare(matchAnyDate(b)));
   if(sorted.length === 0){
     sel.innerHTML = '<option>Aucune rencontre — ajoute-en une dans Calendrier</option>';
     document.getElementById('matchInfoBox').innerHTML = '';
@@ -1324,13 +1355,13 @@ function renderMatchSelect(){
     return;
   }
   sel.innerHTML = sorted.map(m => {
-    const label = `VS ${(m.A&&m.A.adversaire)||'—'} / VS ${(m.B&&m.B.adversaire)||'—'}`;
-    const date = (m.A&&m.A.date) || (m.B&&m.B.date);
+    const label = TEAMS.map(t => `VS ${(m[t]&&m[t].adversaire)||'—'}`).join(' / ');
+    const date = matchAnyDate(m);
     return `<option value="${m.id}">${escapeHtml(label)}${date ? ' — ' + formatDate(date) : ''}</option>`;
   }).join('');
   if(!currentMatchId || !matches.find(m=>m.id===currentMatchId)){
     const todayStr = new Date().toISOString().slice(0,10);
-    const upcoming = sorted.find(m => ((m.A&&m.A.date)||(m.B&&m.B.date)||'') >= todayStr);
+    const upcoming = sorted.find(m => matchAnyDate(m) >= todayStr);
     currentMatchId = (upcoming || sorted[sorted.length-1]).id;
   }
   sel.value = currentMatchId;
@@ -1362,20 +1393,15 @@ function renderMatchInfo(){
   const m = matches.find(x=>x.id === currentMatchId);
   const box = document.getElementById('matchInfoBox');
   if(!m){ box.innerHTML=''; return; }
+  const cardClass = {A:'a', B:'b', C:'c'};
   box.innerHTML = `
     <div class="match-info">
-      <div class="card a">${m.A ? `
-          <b>VS ${escapeHtml(m.A.adversaire||'—')}</b>${m.A.date ? formatDate(m.A.date) : ''}
-          ${miField('A','heure', m.A.heure, 'Heure du RDV')}
-          ${miField('A','lieu', m.A.lieu, 'Lieu du RDV')}
-          ${miField('A','adresse', m.A.adresse, 'Adresse du stade')}
-        ` : '<b>Équipe A</b>à compléter dans Calendrier'}</div>
-      <div class="card b">${m.B ? `
-          <b>VS ${escapeHtml(m.B.adversaire||'—')}</b>${m.B.date ? formatDate(m.B.date) : ''}
-          ${miField('B','heure', m.B.heure, 'Heure du RDV')}
-          ${miField('B','lieu', m.B.lieu, 'Lieu du RDV')}
-          ${miField('B','adresse', m.B.adresse, 'Adresse du stade')}
-        ` : '<b>Équipe B</b>à compléter dans Calendrier'}</div>
+      ${TEAMS.map(t => `<div class="card ${cardClass[t]}">${m[t] ? `
+          <b>VS ${escapeHtml(m[t].adversaire||'—')}</b>${m[t].date ? formatDate(m[t].date) : ''}
+          ${miField(t,'heure', m[t].heure, 'Heure du RDV')}
+          ${miField(t,'lieu', m[t].lieu, 'Lieu du RDV')}
+          ${miField(t,'adresse', m[t].adresse, 'Adresse du stade')}
+        ` : `<b>Équipe ${t}</b>à compléter dans Calendrier`}</div>`).join('')}
     </div>
     <div class="hint" style="margin-top:-8px;">Heure, lieu et adresse sont modifiables ici directement — utile après un import CSV.</div>
   `;
@@ -1403,11 +1429,12 @@ function renderConvocationBody(){
       <span><span class="dot" style="background:var(--beige)"></span>Non sélectionné</span>
       <span><span class="dot" style="background:var(--red)"></span>Équipe A</span>
       <span><span class="dot" style="background:var(--royalblue)"></span>Équipe B</span>
+      <span><span class="dot" style="background:var(--purple)"></span>Équipe C</span>
       <span><span class="dot" style="background:var(--green)"></span>Blessé</span>
       <span><span class="dot" style="background:var(--darkgray)"></span>Non convoqué</span>
       <span>★ Joueur muté (géré dans l'onglet Effectif)</span>
     </div>
-    <div class="hint">Clic sur le nom : les 12 premiers joueurs cliqués passent en Équipe A, les suivants en Équipe B automatiquement — reclique pour basculer manuellement, un 3e clic désélectionne. L'ordre des clics fixe l'ordre d'écriture dans la liste. Clic droit = blessé ou non convoqué.</div>
+    <div class="hint">Clic sur le nom : cycle Équipe A → Équipe B → Équipe C → Reste à placer. Glisser-déposer directement dans la bonne colonne fonctionne aussi. L'ordre des clics fixe l'ordre d'écriture dans la liste. Clic droit = blessé ou non convoqué.</div>
     <div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:10px;">
       <div style="flex:1; min-width:150px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
@@ -1422,6 +1449,13 @@ function renderConvocationBody(){
           <span id="countB" style="font-size:11px; font-weight:700; background:#e8edf9; color:var(--royalblue); padding:2px 8px; border-radius:10px;">0</span>
         </div>
         <div class="chips" id="chipBoxB"></div>
+      </div>
+      <div style="flex:1; min-width:150px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <span style="font-size:12px; font-weight:700; text-transform:uppercase; color:var(--purple-dark);">Équipe C</span>
+          <span id="countC" style="font-size:11px; font-weight:700; background:#f0ebf7; color:var(--purple-dark); padding:2px 8px; border-radius:10px;">0</span>
+        </div>
+        <div class="chips" id="chipBoxC"></div>
       </div>
       <div style="flex:2; min-width:320px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
@@ -1476,8 +1510,8 @@ function closeCtxMenu(){
 
 function chipHtml(c){
   const a = getAssign(c.id);
-  const cls = a.team === 'A' ? 'state-A' : (a.team === 'B' ? 'state-B' : (a.team === 'blesse' ? 'state-blesse' : (a.team === 'absent' ? 'state-absent' : '')));
-  const badge = (a.team === 'A' || a.team === 'B') && a.order ? `<span class="order-badge">${a.order}</span>` : '';
+  const cls = TEAMS.includes(a.team) ? 'state-' + a.team : (a.team === 'blesse' ? 'state-blesse' : (a.team === 'absent' ? 'state-absent' : ''));
+  const badge = TEAMS.includes(a.team) && a.order ? `<span class="order-badge">${a.order}</span>` : '';
   return `<div class="chip ${cls}" data-id="${c.id}">${badge}${escapeHtml(c.name)}${c.category ? ` <span style="opacity:.75; font-weight:600;">(${escapeHtml(c.category)})</span>` : ''}${c.mute ? '<span class="star on">★</span>' : ''}</div>`;
 }
 
@@ -1485,21 +1519,25 @@ function renderChips(){
   const all = sortedChildren();
   const teamA = all.filter(c => getAssign(c.id).team === 'A').sort((a,b)=> getAssign(a.id).order - getAssign(b.id).order);
   const teamB = all.filter(c => getAssign(c.id).team === 'B').sort((a,b)=> getAssign(a.id).order - getAssign(b.id).order);
-  const rest = all.filter(c => !['A','B'].includes(getAssign(c.id).team));
+  const teamC = all.filter(c => getAssign(c.id).team === 'C').sort((a,b)=> getAssign(a.id).order - getAssign(b.id).order);
+  const rest = all.filter(c => !TEAMS.includes(getAssign(c.id).team));
   const restU13 = rest.filter(c => c.category === 'U13');
   const restU12 = rest.filter(c => c.category === 'U12');
   const restAutres = rest.filter(c => c.category !== 'U13' && c.category !== 'U12');
 
   document.getElementById('chipBoxA').innerHTML = teamA.map(chipHtml).join('') || '<span class="empty" style="padding:6px 0;">—</span>';
   document.getElementById('chipBoxB').innerHTML = teamB.map(chipHtml).join('') || '<span class="empty" style="padding:6px 0;">—</span>';
+  document.getElementById('chipBoxC').innerHTML = teamC.map(chipHtml).join('') || '<span class="empty" style="padding:6px 0;">—</span>';
   document.getElementById('chipBoxRestU13').innerHTML = restU13.map(chipHtml).join('') || '<span class="empty" style="padding:6px 0;">—</span>';
   document.getElementById('chipBoxRestU12').innerHTML = restU12.map(chipHtml).join('') || '<span class="empty" style="padding:6px 0;">—</span>';
   document.getElementById('chipBoxRestAutres').innerHTML = restAutres.map(chipHtml).join('') || '<span class="empty" style="padding:6px 0;">—</span>';
   document.getElementById('restAutresCol').style.display = restAutres.length ? '' : 'none';
   document.getElementById('chipBoxA').dataset.team = 'A';
   document.getElementById('chipBoxB').dataset.team = 'B';
+  document.getElementById('chipBoxC').dataset.team = 'C';
   document.getElementById('countA').textContent = teamA.length;
   document.getElementById('countB').textContent = teamB.length;
+  document.getElementById('countC').textContent = teamC.length;
   document.getElementById('countRest').textContent = rest.length;
   document.getElementById('countRestU13').textContent = restU13.length;
   document.getElementById('countRestU12').textContent = restU12.length;
@@ -1525,13 +1563,17 @@ function renderChips(){
       if(a.team === 'blesse' || a.team === 'absent'){
         assignments[id] = {team: undefined, order: undefined};
       } else if(!a.team){
-        const countA = Object.values(assignments).filter(x=>x.team==='A').length;
-        const defaultTeam = countA < 12 ? 'A' : 'B';
+        const counts = {A:0, B:0, C:0};
+        Object.values(assignments).forEach(x=>{ if(counts.hasOwnProperty(x.team)) counts[x.team]++; });
+        const defaultTeam = TEAMS.find(t => counts[t] < 12) || 'A';
         assignments[id] = {team: defaultTeam, order: nextOrder()};
-      } else if(a.team === 'A'){
-        assignments[id] = {team:'B', order: a.order};
       } else {
-        assignments[id] = {team: undefined, order: undefined};
+        const idx = TEAMS.indexOf(a.team);
+        if(idx === -1 || idx === TEAMS.length - 1){
+          assignments[id] = {team: undefined, order: undefined};
+        } else {
+          assignments[id] = {team: TEAMS[idx+1], order: a.order};
+        }
       }
       saveAssignments();
       renderChips();
@@ -1646,10 +1688,12 @@ document.getElementById('generateBtn').addEventListener('click', async ()=>{
     .sort((a,b)=> (getAssign(a.id).order||0) - (getAssign(b.id).order||0));
   const teamBPlayers = children.filter(c => getAssign(c.id).team === 'B')
     .sort((a,b)=> (getAssign(a.id).order||0) - (getAssign(b.id).order||0));
+  const teamCPlayers = children.filter(c => getAssign(c.id).team === 'C')
+    .sort((a,b)=> (getAssign(a.id).order||0) - (getAssign(b.id).order||0));
+  const playersByTeam = {A: teamAPlayers, B: teamBPlayers, C: teamCPlayers};
 
   const syncs = [];
-  if(m.A) syncs.push(syncConvocationVersMatchday(m, 'A', teamAPlayers));
-  if(m.B) syncs.push(syncConvocationVersMatchday(m, 'B', teamBPlayers));
+  TEAMS.forEach(t => { if(m[t]) syncs.push(syncConvocationVersMatchday(m, t, playersByTeam[t])); });
   if(syncs.length){
     Promise.all(syncs).then(resultats=>{
       if(resultats.every(Boolean)) toast('Convocations synchronisées avec Matchday');
@@ -1657,15 +1701,12 @@ document.getElementById('generateBtn').addEventListener('click', async ()=>{
     });
   }
 
-  if(m.A){
-    await renderConvocationImage(m, 'A', teamAPlayers, wrap);
-  } else {
-    toast("Équipe A pas encore renseignée pour cette rencontre — image ignorée");
-  }
-  if(m.B){
-    await renderConvocationImage(m, 'B', teamBPlayers, wrap);
-  } else {
-    toast("Équipe B pas encore renseignée pour cette rencontre — image ignorée");
+  for(const t of TEAMS){
+    if(m[t]){
+      await renderConvocationImage(m, t, playersByTeam[t], wrap);
+    } else {
+      toast(`Équipe ${t} pas encore renseignée pour cette rencontre — image ignorée`);
+    }
   }
 });
 
@@ -1876,12 +1917,12 @@ async function renderConvocationImage(m, teamKey, players, wrap){
   const h3 = document.createElement('div');
   h3.style.fontWeight='700';
   h3.style.marginBottom='6px';
-  h3.style.color = teamKey === 'A' ? '#d62828' : '#1a3fa0';
+  h3.style.color = teamKey === 'A' ? '#d62828' : (teamKey === 'B' ? '#1a3fa0' : '#6b3fa0');
   h3.textContent = 'Équipe ' + teamKey;
   block.appendChild(h3);
   block.appendChild(canvas);
 
-  const teamNum = teamKey === 'A' ? '1' : '2';
+  const teamNum = teamKey === 'A' ? '1' : (teamKey === 'B' ? '2' : '3');
   const dateForName = filenameDate(info.date);
   const filename = `Convocatoria${dateForName ? '_' + dateForName : ''}_(${teamNum}).png`;
 
