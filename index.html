@@ -605,10 +605,10 @@ function undoToast(msg, undoFn){
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
 // ---------- persistence ----------
-const DEFAULT_ROSTER = ["Hadi","Sebastien","Mickaël","Bakoutoubo","Sacha","Keys","Nourou","Yanis","Mathis","Ethan","Abdoul Karim","Jalil","Gabin","Adam","Kalifa","Bilel","Pablo","Melih","Issam","Emir","Loan","Sarah","Shayan","Chahine","Salman","Tasilimi","Theo","Rafael","Matteo","Elias","Ethanmoise","Simon","Milan","Kennely","Jibril","Selyan"];
-const MUTED_NAMES = ["Adam","Mickaël","Yanis","Ethan","Mathis","Shayan","Rafael","Selyan"];
-const U12_NAMES = ["Shayan","Chahine","Salman","Tasilimi","Theo","Rafael","Matteo","Elias","Ethanmoise","Simon","Milan","Kennely","Jibril"];
-const U13_NAMES = ["Hadi","Sebastien","Mickaël","Bakoutoubo","Sacha","Keys","Nourou","Yanis","Mathis","Ethan","Abdoul Karim","Jalil","Gabin","Adam","Kalifa","Bilel","Pablo","Melih","Issam","Emir","Loan","Sarah","Selyan"];
+const DEFAULT_ROSTER = ["Hadi","Sebastien","Mickaël","Bakoutoubo","Sacha","Keys","Nourou","Yanis","Mathis","Ethan","Abdoul Karim","Jalil","Gabin","Adam","Kalifa","Bilel","Pablo","Melih","Issam","Emir","Loan","Sarah","Shayan","Chahine","Salman","Tasilimi","Theo","Rafael","Matteo","Elias","Nylan","Ethanmoise","Simon","Milan","Kennely","Jibril","Selyan"];
+const MUTED_NAMES = ["Adam","Mickaël","Yanis","Ethan","Mathis","Shayan","Rafael","Nylan","Selyan"];
+const U12_NAMES = ["Shayan","Chahine","Salman","Tasilimi","Theo","Rafael","Matteo","Elias","Nylan","Ethanmoise","Simon","Milan","Kennely","Jibril"];
+const U13_NAMES = ["Hadi","Sebastien","Mickaël","Bakoutoubo","Sacha","Keys","Nourou","Yanis","Mathis","Ethan","Abdoul Karim","Jalil","Gabin","Adam","Kalifa","Bilel","Pablo","Melih","Issam","Emir","Loan","Sarah"];
 
 // Returns the most recent Sunday 23:59 that has already passed (the last weekly reset boundary).
 function mostRecentSundayReset(now){
@@ -1435,25 +1435,37 @@ function renderConvocationBody(){
       <span>★ Joueur muté (géré dans l'onglet Effectif)</span>
     </div>
     <div class="hint">Clic sur le nom : cycle Équipe A → Équipe B → Équipe C → Reste à placer. Glisser-déposer directement dans la bonne colonne fonctionne aussi. L'ordre des clics fixe l'ordre d'écriture dans la liste. Clic droit = blessé ou non convoqué.</div>
+    <div style="text-align:right; margin:-4px 0 10px;">
+      <button class="btn btn-primary" id="clearAllTeamsBtn" style="background:var(--darkgray); font-size:11.5px; padding:6px 12px;">Vider toute la sélection</button>
+    </div>
     <div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:10px;">
       <div style="flex:1; min-width:150px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
           <span style="font-size:12px; font-weight:700; text-transform:uppercase; color:var(--red-dark);">Équipe A</span>
-          <span id="countA" style="font-size:11px; font-weight:700; background:#fcebeb; color:var(--red-dark); padding:2px 8px; border-radius:10px;">0</span>
+          <span style="display:flex; align-items:center; gap:6px;">
+            <button class="clear-team-btn" data-team="A" title="Vider l'Équipe A" style="background:none; border:none; color:#b23; font-size:11px; cursor:pointer; text-decoration:underline; padding:0;">vider</button>
+            <span id="countA" style="font-size:11px; font-weight:700; background:#fcebeb; color:var(--red-dark); padding:2px 8px; border-radius:10px;">0</span>
+          </span>
         </div>
         <div class="chips" id="chipBoxA"></div>
       </div>
       <div style="flex:1; min-width:150px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
           <span style="font-size:12px; font-weight:700; text-transform:uppercase; color:var(--royalblue);">Équipe B</span>
-          <span id="countB" style="font-size:11px; font-weight:700; background:#e8edf9; color:var(--royalblue); padding:2px 8px; border-radius:10px;">0</span>
+          <span style="display:flex; align-items:center; gap:6px;">
+            <button class="clear-team-btn" data-team="B" title="Vider l'Équipe B" style="background:none; border:none; color:#b23; font-size:11px; cursor:pointer; text-decoration:underline; padding:0;">vider</button>
+            <span id="countB" style="font-size:11px; font-weight:700; background:#e8edf9; color:var(--royalblue); padding:2px 8px; border-radius:10px;">0</span>
+          </span>
         </div>
         <div class="chips" id="chipBoxB"></div>
       </div>
       <div style="flex:1; min-width:150px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
           <span style="font-size:12px; font-weight:700; text-transform:uppercase; color:var(--purple-dark);">Équipe C</span>
-          <span id="countC" style="font-size:11px; font-weight:700; background:#f0ebf7; color:var(--purple-dark); padding:2px 8px; border-radius:10px;">0</span>
+          <span style="display:flex; align-items:center; gap:6px;">
+            <button class="clear-team-btn" data-team="C" title="Vider l'Équipe C" style="background:none; border:none; color:#b23; font-size:11px; cursor:pointer; text-decoration:underline; padding:0;">vider</button>
+            <span id="countC" style="font-size:11px; font-weight:700; background:#f0ebf7; color:var(--purple-dark); padding:2px 8px; border-radius:10px;">0</span>
+          </span>
         </div>
         <div class="chips" id="chipBoxC"></div>
       </div>
@@ -1488,7 +1500,41 @@ function renderConvocationBody(){
       </div>
     </div>
   `;
+
+  box.querySelectorAll('.clear-team-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=> clearTeamSelection(btn.dataset.team));
+  });
+  document.getElementById('clearAllTeamsBtn').addEventListener('click', clearAllTeamsSelection);
+
   renderChips();
+}
+
+function clearTeamSelection(team){
+  const affectedIds = Object.keys(assignments).filter(id => assignments[id].team === team);
+  if(affectedIds.length === 0){ toast(`Équipe ${team} déjà vide`); return; }
+  const snapshot = {};
+  affectedIds.forEach(id => { snapshot[id] = assignments[id]; delete assignments[id]; });
+  saveAssignments();
+  renderChips();
+  undoToast(`Équipe ${team} vidée (${affectedIds.length} joueur${affectedIds.length>1?'s':''})`, ()=>{
+    Object.assign(assignments, snapshot);
+    saveAssignments();
+    renderChips();
+  });
+}
+
+function clearAllTeamsSelection(){
+  const affectedIds = Object.keys(assignments).filter(id => TEAMS.includes(assignments[id].team));
+  if(affectedIds.length === 0){ toast('Aucune sélection à vider'); return; }
+  const snapshot = {};
+  affectedIds.forEach(id => { snapshot[id] = assignments[id]; delete assignments[id]; });
+  saveAssignments();
+  renderChips();
+  undoToast(`Sélection des 3 équipes vidée (${affectedIds.length} joueur${affectedIds.length>1?'s':''})`, ()=>{
+    Object.assign(assignments, snapshot);
+    saveAssignments();
+    renderChips();
+  });
 }
 
 function getAssign(id){
