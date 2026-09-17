@@ -511,6 +511,7 @@ let matches = [];
 let currentMatchId = null;
 let editingSavedId = null; // {id, matchId, team} de la convocation sauvegardée en cours d'édition
 let assignments = {}; // { childId: {team:'A'|'B'|'blesse', mute:bool} }
+let stoppedTeams = new Set(); // équipes dont la sélection auto/cyclique est "stoppée" pour la rencontre en cours
 let savedConvocations = [];
 
 // ---------- synchronisation avec Matchday (suivi de match en direct) ----------
@@ -633,7 +634,7 @@ function runWeeklyResetIfDue(){
   const lastReset = lastResetRaw ? new Date(lastResetRaw) : new Date(0);
   if(lastReset.getTime() < boundary.getTime()){
     Object.keys(localStorage).forEach(key=>{
-      if(key.startsWith('conv_')) localStorage.removeItem(key);
+      if(key.startsWith('conv_') || key.startsWith('stop_')) localStorage.removeItem(key);
     });
     localStorage.setItem('lastReset', now.toISOString());
   }
@@ -685,10 +686,19 @@ async function loadAssignments(matchId){
     const r = await store.get('conv_' + matchId, false);
     assignments = r ? JSON.parse(r.value) : {};
   }catch(e){ assignments = {}; }
+  try{
+    const r2 = await store.get('stop_' + matchId, false);
+    stoppedTeams = new Set(r2 ? JSON.parse(r2.value) : []);
+  }catch(e){ stoppedTeams = new Set(); }
 }
 async function saveAssignments(){
   if(!currentMatchId) return;
   try{ await store.set('conv_' + currentMatchId, JSON.stringify(assignments), false); }
+  catch(e){ toast("Erreur d'enregistrement"); }
+}
+async function saveStoppedTeams(){
+  if(!currentMatchId) return;
+  try{ await store.set('stop_' + currentMatchId, JSON.stringify([...stoppedTeams]), false); }
   catch(e){ toast("Erreur d'enregistrement"); }
 }
 
@@ -1434,41 +1444,48 @@ function renderConvocationBody(){
       <span><span class="dot" style="background:var(--darkgray)"></span>Non convoqué</span>
       <span>★ Joueur muté (géré dans l'onglet Effectif)</span>
     </div>
-    <div class="hint">Clic sur le nom : cycle Équipe A → Équipe B → Équipe C → Reste à placer. Glisser-déposer directement dans la bonne colonne fonctionne aussi. L'ordre des clics fixe l'ordre d'écriture dans la liste. Clic droit = blessé ou non convoqué.</div>
+    <div class="hint">Clic sur le nom : cycle Équipe A → Équipe B → Équipe C → Reste à placer (les équipes "stoppées" sont sautées). Glisser-déposer directement dans la bonne colonne fonctionne aussi, y compris vers une équipe stoppée. L'ordre des clics fixe l'ordre d'écriture dans la liste. Clic droit = blessé ou non convoqué.</div>
     <div style="text-align:right; margin:-4px 0 10px;">
       <button class="btn btn-primary" id="clearAllTeamsBtn" style="background:var(--darkgray); font-size:11.5px; padding:6px 12px;">Vider toute la sélection</button>
     </div>
     <div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:10px;">
-      <div style="flex:1; min-width:150px;">
+      <div style="flex:1; min-width:150px;" id="teamColA">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
           <span style="font-size:12px; font-weight:700; text-transform:uppercase; color:var(--red-dark);">Équipe A</span>
-          <span style="display:flex; align-items:center; gap:6px;">
+          <span style="display:flex; align-items:center; gap:8px;">
+            <button class="stop-team-btn" data-team="A" style="background:none; border:none; color:var(--red-dark); font-size:11px; cursor:pointer; text-decoration:underline; padding:0;">stop</button>
             <button class="clear-team-btn" data-team="A" title="Vider l'Équipe A" style="background:none; border:none; color:#b23; font-size:11px; cursor:pointer; text-decoration:underline; padding:0;">vider</button>
             <span id="countA" style="font-size:11px; font-weight:700; background:#fcebeb; color:var(--red-dark); padding:2px 8px; border-radius:10px;">0</span>
           </span>
         </div>
+        <div id="stopBadgeA" style="display:none; font-size:10.5px; font-weight:700; color:var(--red-dark); background:#fcebeb; border-radius:6px; padding:3px 8px; margin-bottom:6px;">⛔ Équipe stoppée — les autres joueurs sont orientés ailleurs</div>
         <div class="chips" id="chipBoxA"></div>
       </div>
-      <div style="flex:1; min-width:150px;">
+      <div style="flex:1; min-width:150px;" id="teamColB">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
           <span style="font-size:12px; font-weight:700; text-transform:uppercase; color:var(--royalblue);">Équipe B</span>
-          <span style="display:flex; align-items:center; gap:6px;">
+          <span style="display:flex; align-items:center; gap:8px;">
+            <button class="stop-team-btn" data-team="B" style="background:none; border:none; color:var(--royalblue); font-size:11px; cursor:pointer; text-decoration:underline; padding:0;">stop</button>
             <button class="clear-team-btn" data-team="B" title="Vider l'Équipe B" style="background:none; border:none; color:#b23; font-size:11px; cursor:pointer; text-decoration:underline; padding:0;">vider</button>
             <span id="countB" style="font-size:11px; font-weight:700; background:#e8edf9; color:var(--royalblue); padding:2px 8px; border-radius:10px;">0</span>
           </span>
         </div>
+        <div id="stopBadgeB" style="display:none; font-size:10.5px; font-weight:700; color:var(--royalblue); background:#e8edf9; border-radius:6px; padding:3px 8px; margin-bottom:6px;">⛔ Équipe stoppée — les autres joueurs sont orientés ailleurs</div>
         <div class="chips" id="chipBoxB"></div>
       </div>
-      <div style="flex:1; min-width:150px;">
+      <div style="flex:1; min-width:150px;" id="teamColC">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
           <span style="font-size:12px; font-weight:700; text-transform:uppercase; color:var(--purple-dark);">Équipe C</span>
-          <span style="display:flex; align-items:center; gap:6px;">
+          <span style="display:flex; align-items:center; gap:8px;">
+            <button class="stop-team-btn" data-team="C" style="background:none; border:none; color:var(--purple-dark); font-size:11px; cursor:pointer; text-decoration:underline; padding:0;">stop</button>
             <button class="clear-team-btn" data-team="C" title="Vider l'Équipe C" style="background:none; border:none; color:#b23; font-size:11px; cursor:pointer; text-decoration:underline; padding:0;">vider</button>
             <span id="countC" style="font-size:11px; font-weight:700; background:#f0ebf7; color:var(--purple-dark); padding:2px 8px; border-radius:10px;">0</span>
           </span>
         </div>
+        <div id="stopBadgeC" style="display:none; font-size:10.5px; font-weight:700; color:var(--purple-dark); background:#f0ebf7; border-radius:6px; padding:3px 8px; margin-bottom:6px;">⛔ Équipe stoppée — les autres joueurs sont orientés ailleurs</div>
         <div class="chips" id="chipBoxC"></div>
       </div>
+
       <div style="flex:2; min-width:320px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
           <span style="font-size:12px; font-weight:700; text-transform:uppercase; color:#8b978f;">Reste à placer</span>
@@ -1504,7 +1521,11 @@ function renderConvocationBody(){
   box.querySelectorAll('.clear-team-btn').forEach(btn=>{
     btn.addEventListener('click', ()=> clearTeamSelection(btn.dataset.team));
   });
+  box.querySelectorAll('.stop-team-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=> toggleStopTeam(btn.dataset.team));
+  });
   document.getElementById('clearAllTeamsBtn').addEventListener('click', clearAllTeamsSelection);
+  updateStopUI();
 
   renderChips();
 }
@@ -1534,6 +1555,34 @@ function clearAllTeamsSelection(){
     Object.assign(assignments, snapshot);
     saveAssignments();
     renderChips();
+  });
+}
+
+function toggleStopTeam(team){
+  if(stoppedTeams.has(team)){
+    stoppedTeams.delete(team);
+    toast(`Équipe ${team} de nouveau ouverte à la sélection`);
+  } else {
+    if(stoppedTeams.size >= TEAMS.length - 1){
+      toast('Impossible de stopper toutes les équipes en même temps');
+      return;
+    }
+    stoppedTeams.add(team);
+    toast(`Équipe ${team} stoppée — les prochains joueurs iront vers les autres équipes`);
+  }
+  saveStoppedTeams();
+  updateStopUI();
+}
+
+function updateStopUI(){
+  TEAMS.forEach(t=>{
+    const col = document.getElementById('teamCol' + t);
+    const badge = document.getElementById('stopBadge' + t);
+    const btn = document.querySelector(`.stop-team-btn[data-team="${t}"]`);
+    const isStopped = stoppedTeams.has(t);
+    if(col) col.style.opacity = isStopped ? '.55' : '1';
+    if(badge) badge.style.display = isStopped ? '' : 'none';
+    if(btn) btn.textContent = isStopped ? 'reprendre' : 'stop';
   });
 }
 
@@ -1611,14 +1660,17 @@ function renderChips(){
       } else if(!a.team){
         const counts = {A:0, B:0, C:0};
         Object.values(assignments).forEach(x=>{ if(counts.hasOwnProperty(x.team)) counts[x.team]++; });
-        const defaultTeam = TEAMS.find(t => counts[t] < 12) || 'A';
+        const open = TEAMS.filter(t => !stoppedTeams.has(t));
+        const pool = open.length ? open : TEAMS;
+        const defaultTeam = pool.find(t => counts[t] < 12) || pool[0];
         assignments[id] = {team: defaultTeam, order: nextOrder()};
       } else {
-        const idx = TEAMS.indexOf(a.team);
-        if(idx === -1 || idx === TEAMS.length - 1){
+        let nextIdx = TEAMS.indexOf(a.team) + 1;
+        while(nextIdx < TEAMS.length && stoppedTeams.has(TEAMS[nextIdx])) nextIdx++;
+        if(nextIdx >= TEAMS.length){
           assignments[id] = {team: undefined, order: undefined};
         } else {
-          assignments[id] = {team: TEAMS[idx+1], order: a.order};
+          assignments[id] = {team: TEAMS[nextIdx], order: a.order};
         }
       }
       saveAssignments();
