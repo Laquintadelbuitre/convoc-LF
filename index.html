@@ -522,6 +522,50 @@ const MATCHDAY_API_URL = 'https://script.google.com/macros/s/AKfycbwYbbHUMDDQmew
 const MATCHDAY_PWD = '0501';
 const MATCHDAY_EQUIPE_PAR_TEAM = { A: 'U13-1', B: 'U13-2' };
 
+// ---------- synchronisation avec le Suivi U13 (article 5.8 : règles 1 à 4) ----------
+// Chaque convocation générée crée (ou met à jour) la feuille de match « À valider »
+// de l'équipe dans le Suivi U13. Équipe A = 1 (D1), B = 2, C = 3.
+const SUIVI_API_URL = 'https://script.google.com/macros/s/AKfycbz4OQYwNWZKlaWFUUoqzhKcrcC9ric8wcPYEwpbj2HAZxgRueJr9AwlpvnEo9E8K5wRhQ/exec';
+const SUIVI_PWD = '0501'; // doit être identique à CLE_ACCES (onglet Parametres du Suivi U13)
+
+/** Envoie la convocation d'une équipe vers le Suivi U13. Renvoie la réponse du suivi, ou {ok:false}. Ne bloque jamais la génération des images. */
+async function syncConvocationVersSuivi(m, teamKey, players){
+  const info = m[teamKey];
+  if(!info || !info.date) return {ok:true, ignore:true};
+  try{
+    const res = await fetch(SUIVI_API_URL, {
+      method: 'POST',
+      headers: {'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({
+        action: 'syncConvocation',
+        pwd: SUIVI_PWD,
+        equipe: teamKey,
+        date: info.date,
+        heure: convertirHeurePourMatchday(info.heure),
+        adversaire: info.adversaire || '',
+        lieu: info.lieu || '',
+        joueurs: players.map(p => p.name)
+      })
+    });
+    const data = await res.json();
+    return data || {ok:false};
+  }catch(e){
+    return {ok:false, erreur: 'Suivi U13 injoignable'};
+  }
+}
+
+/** Résume les retours du Suivi U13 (joueurs bloqués par les règles 1 à 4). */
+function resumeSuivi(retours){
+  const echecs = retours.filter(r => !r.ok);
+  if(echecs.length) return 'Suivi U13 : ' + (echecs[0].erreur || 'envoi échoué');
+  const bloques = [];
+  retours.forEach(r => (r.bloques || []).forEach(b => bloques.push(`${b.joueur} (équipe ${r.equipe})`)));
+  const alertes = [].concat(...retours.map(r => r.alertes || []));
+  if(bloques.length) return '⛔ Suivi U13 – joueur(s) bloqué(s) : ' + bloques.join(', ');
+  if(alertes.length) return '⚠️ Suivi U13 – ' + alertes[0];
+  return '✅ Feuilles de match envoyées au Suivi U13 (règles 1 à 4 respectées)';
+}
+
 /** Convertit une heure au format libre ("14h15", "14h", "14:15") en "HH:mm". Renvoie '' si non reconnu. */
 function convertirHeurePourMatchday(heureTexte){
   if(!heureTexte) return '';
@@ -1796,6 +1840,16 @@ document.getElementById('generateBtn').addEventListener('click', async ()=>{
     Promise.all(syncs).then(resultats=>{
       if(resultats.every(Boolean)) toast('Convocations synchronisées avec Matchday');
       else toast('Images générées — synchronisation Matchday partiellement échouée');
+    });
+  }
+
+  // Envoi vers le Suivi U13 (feuilles de match à valider + contrôle des règles 1 à 4)
+  const syncsSuivi = [];
+  TEAMS.forEach(t => { if(m[t]) syncsSuivi.push(syncConvocationVersSuivi(m, t, playersByTeam[t])); });
+  if(syncsSuivi.length){
+    Promise.all(syncsSuivi).then(retours=>{
+      const utiles = retours.filter(r => !r.ignore);
+      if(utiles.length) setTimeout(()=> toast(resumeSuivi(utiles)), 2600);
     });
   }
 
