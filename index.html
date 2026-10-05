@@ -612,7 +612,8 @@ async function chargerInterditsSuivi(){
         return o;
       };
       equipes[t] = { interdits: index(r.interdits), quota: index(r.quota), maxQuota: r.maxQuota, regle3: r.regle3,
-        nbInterdits: (r.interdits || []).length, equipeSuivi: r.equipe };
+        nbInterdits: (r.interdits || []).length, equipeSuivi: r.equipe, type: r.type || '', journee: r.journee || '',
+        dansCalendrier: r.dansCalendrier !== false };
     });
     suiviControle = { etat: 'ok', matchId: demande, equipes };
   }catch(e){
@@ -656,18 +657,22 @@ function afficherBandeauSuivi(){
   b.className = '';
   if(suiviControle.etat === 'aucun'){ b.style.display = 'none'; return; }
   b.style.display = '';
-  if(suiviControle.etat === 'chargement'){ b.textContent = 'Suivi U13 : vérification des interdictions (règles 1 à 4)…'; return; }
+  if(suiviControle.etat === 'chargement'){ b.textContent = 'Participation & qualification : vérification des interdictions (règles 1 à 4)…'; return; }
   if(suiviControle.etat === 'erreur'){
     b.className = 'erreur';
-    b.innerHTML = '⚠️ Suivi U13 injoignable : interdictions non vérifiées.<button id="suiviRecharger">réessayer</button>';
+    b.innerHTML = '⚠️ Outil Participation & qualification injoignable : interdictions non vérifiées.<button id="suiviRecharger">réessayer</button>';
   } else {
     const parts = TEAMS.filter(t => suiviControle.equipes[t]).map(t => {
       const e = suiviControle.equipes[t];
-      return `Équipe ${t} : ${e.nbInterdits ? '⛔ ' + e.nbInterdits + ' interdit(s)' : '✅ aucun interdit'}`;
+      // Type du match tel qu'enregistré dans l'outil Participation & qualification
+      const nature = e.type === 'Amical' ? 'amical / tournoi, non officiel' :
+        (e.type === 'Coupe' ? 'coupe' : (e.type === 'Exempt' ? 'exempte' : (e.journee ? 'championnat J' + e.journee : 'championnat')));
+      const etat = e.type === 'Amical' ? 'aucune restriction' : (e.nbInterdits ? '⛔ ' + e.nbInterdits + ' interdit(s)' : '✅ aucun interdit');
+      return `<b>Équipe ${t}</b> (${nature}${e.dansCalendrier ? '' : ', hors calendrier'}) : ${etat}`;
     });
     const mauvais = placementsInterdits();
     const quotas = quotasDepasses();
-    b.innerHTML = 'Suivi U13 – ' + parts.join(' · ') + '<button id="suiviRecharger">actualiser</button>' +
+    b.innerHTML = 'Participation & qualification – ' + parts.join(' · ') + '<button id="suiviRecharger">actualiser</button>' +
       mauvais.map(x => `<div class="alerte-ligne">⛔ ${escapeHtml(x.c.name)} ne peut pas jouer en équipe ${x.team} : ${escapeHtml(x.motifs.join(' ; '))}</div>`).join('') +
       quotas.map(q => `<div class="alerte-ligne">⛔ Règle 3 : ${q.noms.length} joueurs du quota en équipe ${q.team} (maximum ${q.max}) : ${escapeHtml(q.noms.join(', '))}</div>`).join('');
   }
