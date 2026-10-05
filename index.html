@@ -239,6 +239,14 @@
   .chip.state-C{background:var(--purple); color:#fff;}
   .chip.state-blesse{background:var(--green); color:#fff;}
   .chip.state-absent{background:var(--darkgray); color:#fff;}
+  .chip.interdit{outline:3px solid #d0021b; outline-offset:1px; background-image:repeating-linear-gradient(135deg, rgba(255,255,255,.18) 0 6px, transparent 6px 12px);}
+  .chip .ban{font-size:10.5px; font-weight:800; margin-left:5px; padding:0 5px; border-radius:6px; background:#fde7e5; color:#b3261e;}
+  .chip.state-A .ban, .chip.state-B .ban, .chip.state-C .ban{background:#fff; color:#b3261e;}
+  .chip .quota{margin-left:4px;}
+  #suiviBandeau{font-size:12px; border-radius:8px; padding:7px 10px; margin:0 0 10px; background:#eef1f6; color:#3c4656;}
+  #suiviBandeau.erreur{background:#fff3d6; color:#7a5200;}
+  #suiviBandeau .alerte-ligne{color:#b3261e; font-weight:700; margin-top:3px;}
+  #suiviBandeau button{background:none; border:none; color:inherit; text-decoration:underline; cursor:pointer; font-size:12px; padding:0 0 0 6px;}
   .ctx-menu{
     position:fixed;
     background:#fff;
@@ -526,7 +534,7 @@ const MATCHDAY_EQUIPE_PAR_TEAM = { A: 'U13-1', B: 'U13-2' };
 // Chaque convocation générée crée (ou met à jour) la feuille de match « À valider »
 // de l'équipe dans le Suivi U13. Équipe A = 1 (D1), B = 2, C = 3.
 const SUIVI_API_URL = 'https://script.google.com/macros/s/AKfycbz4OQYwNWZKlaWFUUoqzhKcrcC9ric8wcPYEwpbj2HAZxgRueJr9AwlpvnEo9E8K5wRhQ/exec';
-const SUIVI_PWD = '0501'; // doit être identique à CLE_ACCES (onglet Parametres du Suivi U13)
+const SUIVI_PWD = '0501'; // code d'accès du Suivi U13
 
 /** Envoie la convocation d'une équipe vers le Suivi U13. Renvoie la réponse du suivi, ou {ok:false}. Ne bloque jamais la génération des images. */
 async function syncConvocationVersSuivi(m, teamKey, players){
@@ -564,6 +572,107 @@ function resumeSuivi(retours){
   if(bloques.length) return '⛔ Suivi U13 – joueur(s) bloqué(s) : ' + bloques.join(', ');
   if(alertes.length) return '⚠️ Suivi U13 – ' + alertes[0];
   return '✅ Feuilles de match envoyées au Suivi U13 (règles 1 à 4 respectées)';
+}
+
+// ---------- interdictions de l'article 5.8, lues dans le Suivi U13 ----------
+// Pour la rencontre choisie : qui ne peut pas jouer dans chaque équipe (règles 1, 2, 4)
+// et qui compte dans le quota de la règle 3. La sélection automatique évite ces équipes.
+let suiviControle = { etat: 'aucun', matchId: null, equipes: {} };
+
+function cleNomSuivi(s){
+  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+async function chargerInterditsSuivi(){
+  const m = matches.find(x => x.id === currentMatchId);
+  const dates = {};
+  if(m) TEAMS.forEach(t => { if(m[t] && m[t].date) dates[t] = m[t].date; });
+  const demande = currentMatchId;
+  if(!Object.keys(dates).length){ suiviControle = { etat: 'aucun', matchId: demande, equipes: {} }; afficherBandeauSuivi(); return; }
+  suiviControle = { etat: 'chargement', matchId: demande, equipes: {} };
+  afficherBandeauSuivi();
+  try{
+    const res = await fetch(SUIVI_API_URL, {
+      method: 'POST',
+      headers: {'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action: 'api', pwd: SUIVI_PWD, fn: 'interditsConvocation', args: [dates] })
+    });
+    const data = await res.json();
+    if(demande !== currentMatchId) return; // une autre rencontre a été choisie entre-temps
+    if(!data || !data.ok) throw new Error((data && data.erreur) || 'réponse invalide');
+    const equipes = {};
+    Object.keys(data.resultat || {}).forEach(t => {
+      const r = data.resultat[t];
+      const index = lignes => {
+        const o = {};
+        (lignes || []).forEach(l => {
+          o[cleNomSuivi(l.prenom)] = l.motifs;
+          if(l.nom) o[cleNomSuivi(l.prenom + ' ' + l.nom)] = l.motifs;
+        });
+        return o;
+      };
+      equipes[t] = { interdits: index(r.interdits), quota: index(r.quota), maxQuota: r.maxQuota, regle3: r.regle3,
+        nbInterdits: (r.interdits || []).length, equipeSuivi: r.equipe };
+    });
+    suiviControle = { etat: 'ok', matchId: demande, equipes };
+  }catch(e){
+    if(demande !== currentMatchId) return;
+    suiviControle = { etat: 'erreur', matchId: demande, equipes: {}, erreur: e.message || String(e) };
+  }
+  if(document.getElementById('chipBoxA')) renderChips();
+  afficherBandeauSuivi();
+}
+
+/** Motifs d'interdiction de l'enfant dans l'équipe (ou null). */
+function interditSuivi(c, team){
+  const e = suiviControle.equipes[team];
+  return e ? (e.interdits[cleNomSuivi(c.name)] || null) : null;
+}
+function quotaSuivi(c, team){
+  const e = suiviControle.equipes[team];
+  return e ? (e.quota[cleNomSuivi(c.name)] || null) : null;
+}
+/** Enfants placés dans une équipe où ils n'ont pas le droit de jouer. */
+function placementsInterdits(){
+  return children.filter(c => {
+    const t = getAssign(c.id).team;
+    return TEAMS.includes(t) && interditSuivi(c, t);
+  }).map(c => ({ c, team: getAssign(c.id).team, motifs: interditSuivi(c, getAssign(c.id).team) }));
+}
+function quotasDepasses(){
+  const out = [];
+  TEAMS.forEach(t => {
+    const e = suiviControle.equipes[t];
+    if(!e || !e.regle3) return;
+    const noms = children.filter(c => getAssign(c.id).team === t && quotaSuivi(c, t)).map(c => c.name);
+    if(noms.length > e.maxQuota) out.push({ team: t, noms, max: e.maxQuota });
+  });
+  return out;
+}
+
+function afficherBandeauSuivi(){
+  const b = document.getElementById('suiviBandeau');
+  if(!b) return;
+  b.className = '';
+  if(suiviControle.etat === 'aucun'){ b.style.display = 'none'; return; }
+  b.style.display = '';
+  if(suiviControle.etat === 'chargement'){ b.textContent = 'Suivi U13 : vérification des interdictions (règles 1 à 4)…'; return; }
+  if(suiviControle.etat === 'erreur'){
+    b.className = 'erreur';
+    b.innerHTML = '⚠️ Suivi U13 injoignable : interdictions non vérifiées.<button id="suiviRecharger">réessayer</button>';
+  } else {
+    const parts = TEAMS.filter(t => suiviControle.equipes[t]).map(t => {
+      const e = suiviControle.equipes[t];
+      return `Équipe ${t} : ${e.nbInterdits ? '⛔ ' + e.nbInterdits + ' interdit(s)' : '✅ aucun interdit'}`;
+    });
+    const mauvais = placementsInterdits();
+    const quotas = quotasDepasses();
+    b.innerHTML = 'Suivi U13 – ' + parts.join(' · ') + '<button id="suiviRecharger">actualiser</button>' +
+      mauvais.map(x => `<div class="alerte-ligne">⛔ ${escapeHtml(x.c.name)} ne peut pas jouer en équipe ${x.team} : ${escapeHtml(x.motifs.join(' ; '))}</div>`).join('') +
+      quotas.map(q => `<div class="alerte-ligne">⛔ Règle 3 : ${q.noms.length} joueurs du quota en équipe ${q.team} (maximum ${q.max}) : ${escapeHtml(q.noms.join(', '))}</div>`).join('');
+  }
+  const r = document.getElementById('suiviRecharger');
+  if(r) r.addEventListener('click', chargerInterditsSuivi);
 }
 
 /** Convertit une heure au format libre ("14h15", "14h", "14:15") en "HH:mm". Renvoie '' si non reconnu. */
@@ -1455,6 +1564,7 @@ async function onMatchChange(){
   await loadAssignments(currentMatchId);
   renderMatchInfo();
   renderConvocationBody();
+  chargerInterditsSuivi();
 }
 
 function miField(team, key, value, placeholder){
@@ -1507,6 +1617,7 @@ function renderConvocationBody(){
       <span><span class="dot" style="background:var(--darkgray)"></span>Non convoqué</span>
       <span>★ Joueur muté (géré dans l'onglet Effectif)</span>
     </div>
+    <div id="suiviBandeau" style="display:none"></div>
     <div class="hint">Clic sur le nom : cycle Équipe A → Équipe B → Équipe C → Reste à placer (les équipes "stoppées" sont sautées). Glisser-déposer directement dans la bonne colonne fonctionne aussi, y compris vers une équipe stoppée. L'ordre des clics fixe l'ordre d'écriture dans la liste. Clic droit = blessé ou non convoqué.</div>
     <div style="text-align:right; margin:-4px 0 10px;">
       <button class="btn btn-primary" id="clearAllTeamsBtn" style="background:var(--darkgray); font-size:11.5px; padding:6px 12px;">Vider toute la sélection</button>
@@ -1589,6 +1700,7 @@ function renderConvocationBody(){
   });
   document.getElementById('clearAllTeamsBtn').addEventListener('click', clearAllTeamsSelection);
   updateStopUI();
+  afficherBandeauSuivi();
 
   renderChips();
 }
@@ -1670,7 +1782,16 @@ function chipHtml(c){
   const a = getAssign(c.id);
   const cls = TEAMS.includes(a.team) ? 'state-' + a.team : (a.team === 'blesse' ? 'state-blesse' : (a.team === 'absent' ? 'state-absent' : ''));
   const badge = TEAMS.includes(a.team) && a.order ? `<span class="order-badge">${a.order}</span>` : '';
-  return `<div class="chip ${cls}" data-id="${c.id}">${badge}${escapeHtml(c.name)}${c.category ? ` <span style="opacity:.75; font-weight:600;">(${escapeHtml(c.category)})</span>` : ''}${c.mute ? '<span class="star on">★</span>' : ''}</div>`;
+  // Interdictions du Suivi U13 : équipes où l'enfant ne peut pas jouer ce week-end
+  const bannies = TEAMS.filter(t => interditSuivi(c, t));
+  const placeInterdit = TEAMS.includes(a.team) && bannies.includes(a.team);
+  const titre = TEAMS.map(t => {
+    const mi = interditSuivi(c, t), mq = quotaSuivi(c, t);
+    return mi ? `Équipe ${t} interdite : ${mi.join(' ; ')}` : (mq ? `Équipe ${t} : ${mq.join(' ; ')}` : '');
+  }).filter(Boolean).join('\n');
+  const ban = bannies.length ? `<span class="ban">⛔${bannies.join('')}</span>` : '';
+  const quota = TEAMS.includes(a.team) && quotaSuivi(c, a.team) ? '<span class="quota" title="Compte dans le quota de la règle 3">⚠️</span>' : '';
+  return `<div class="chip ${cls}${placeInterdit ? ' interdit' : ''}" data-id="${c.id}"${titre ? ` title="${escapeHtml(titre)}"` : ''}>${badge}${escapeHtml(c.name)}${c.category ? ` <span style="opacity:.75; font-weight:600;">(${escapeHtml(c.category)})</span>` : ''}${c.mute ? '<span class="star on">★</span>' : ''}${ban}${quota}</div>`;
 }
 
 function renderChips(){
@@ -1700,6 +1821,7 @@ function renderChips(){
   document.getElementById('countRestU13').textContent = restU13.length;
   document.getElementById('countRestU12').textContent = restU12.length;
   document.getElementById('countRestAutres').textContent = restAutres.length;
+  afficherBandeauSuivi();
 
   document.querySelectorAll('#convocationBody .chip').forEach(chip=>{
     let startX=0, startY=0, dragging=false, ghost=null, dropTarget=null;
@@ -1711,6 +1833,9 @@ function renderChips(){
         assignments[id] = {team: undefined, order: undefined};
       } else if(a.team !== teamKey){
         assignments[id] = {team: teamKey, order: nextOrder()};
+        const enfant = children.find(x => x.id === id);
+        const motifs = enfant && interditSuivi(enfant, teamKey);
+        if(motifs) toast(`⛔ ${enfant.name} ne peut pas jouer en équipe ${teamKey} : ${motifs.join(' ; ')}`);
       }
       saveAssignments();
       renderChips();
@@ -1718,18 +1843,26 @@ function renderChips(){
 
     function cycleClick(id){
       const a = getAssign(id);
+      const enfant = children.find(x => x.id === id);
+      const rencontre = matches.find(x => x.id === currentMatchId);
+      const joue = t => !rencontre || !TEAMS.some(x => rencontre[x]) || !!rencontre[t];
+      const autorisee = t => !stoppedTeams.has(t) && joue(t) && !(enfant && interditSuivi(enfant, t));
       if(a.team === 'blesse' || a.team === 'absent'){
         assignments[id] = {team: undefined, order: undefined};
       } else if(!a.team){
         const counts = {A:0, B:0, C:0};
         Object.values(assignments).forEach(x=>{ if(counts.hasOwnProperty(x.team)) counts[x.team]++; });
-        const open = TEAMS.filter(t => !stoppedTeams.has(t));
+        const open = TEAMS.filter(autorisee);
+        if(!open.length && enfant && TEAMS.some(t => interditSuivi(enfant, t))){
+          toast(`⛔ ${enfant.name} ne peut jouer dans aucune équipe ouverte ce week-end (Suivi U13)`);
+          return;
+        }
         const pool = open.length ? open : TEAMS;
         const defaultTeam = pool.find(t => counts[t] < 12) || pool[0];
         assignments[id] = {team: defaultTeam, order: nextOrder()};
       } else {
         let nextIdx = TEAMS.indexOf(a.team) + 1;
-        while(nextIdx < TEAMS.length && stoppedTeams.has(TEAMS[nextIdx])) nextIdx++;
+        while(nextIdx < TEAMS.length && !autorisee(TEAMS[nextIdx])) nextIdx++;
         if(nextIdx >= TEAMS.length){
           assignments[id] = {team: undefined, order: undefined};
         } else {
@@ -1835,6 +1968,13 @@ function escapeHtml(s){
 document.getElementById('generateBtn').addEventListener('click', async ()=>{
   const m = matches.find(x=>x.id === currentMatchId);
   if(!m){ toast('Sélectionne une rencontre'); return; }
+  const interditsPlaces = placementsInterdits();
+  const quotas = quotasDepasses();
+  if(interditsPlaces.length || quotas.length){
+    const lignes = interditsPlaces.map(x => `- ${x.c.name} (équipe ${x.team}) : ${x.motifs.join(' ; ')}`)
+      .concat(quotas.map(q => `- Règle 3, équipe ${q.team} : ${q.noms.length} joueurs du quota (max ${q.max})`));
+    if(!confirm('⛔ Article 5.8 non respecté :\n' + lignes.join('\n') + '\n\nGénérer les convocations quand même ?')) return;
+  }
 
   try{
     await document.fonts.load('700 32px "Roboto Condensed"');
